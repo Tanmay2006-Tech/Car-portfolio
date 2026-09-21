@@ -8,6 +8,8 @@ import { ToneMappingMode } from 'postprocessing'
 import { Car } from './scene/Car'
 import { ChaseCamera } from './scene/ChaseCamera'
 import { SunRig } from './scene/SunRig'
+import { QualityMonitor } from './scene/QualityMonitor'
+import { useQuality } from './scene/quality'
 import { srgb, DAWN_LOW } from './scene/colors'
 import { Sky } from './scene/Sky'
 import { Ground } from './scene/Ground'
@@ -42,6 +44,26 @@ const FOG_NEAR = 40
 const FOG_FAR = 180
 
 export default function App() {
+  // Leg 0/5 only (src/scene/QualityMonitor.tsx) — the car isn't moving, so
+  // this is the one moment to spend extra render quality instead of saving
+  // frame time: AdaptiveDpr's downgrade disabled (letting the Canvas sit at
+  // the device's own native devicePixelRatio, clamped to [1,2] below, same
+  // as always) and real MSAA through the EffectComposer, both switched
+  // back on the instant scroll starts driving.
+  //
+  // dpr itself never changes with isStationary — it stays the same [1,2]
+  // clamp range in both states. Forcing it to a literal 2 while stationary
+  // was tried first and measured: on a device whose real devicePixelRatio
+  // is 1 (confirmed against this project's own dev machine), that forces
+  // 4x the pixel count of what the device would render natively, not "no
+  // downgrade" — mean fps parked fell from ~52fps to ~8fps, an order of
+  // magnitude, for detail nobody's screen can even show. AdaptiveDpr is the
+  // ONLY thing that ever pushes dpr below the device's native ratio
+  // (Canvas's own initial dpr already clamps window.devicePixelRatio into
+  // [1,2] and never scales it up), so simply not mounting AdaptiveDpr while
+  // stationary is what "full DPR" actually means per-device.
+  const isStationary = useQuality((state) => state.isStationary)
+
   return (
     <>
       {/* Fixed wrapper per CLAUDE.md section 5: pinning (leg 1, PROMPTS.md
@@ -69,6 +91,11 @@ export default function App() {
         >
           <Sky />
           <fog attach="fog" args={[fogColor, FOG_NEAR, FOG_FAR]} />
+
+          {/* Writes useQuality's isStationary from scroll.progress every
+              frame (imperative getState/setState, not the hook, so this
+              doesn't itself re-render on scroll — see QualityMonitor.tsx). */}
+          <QualityMonitor />
 
           {/* Key light + shadow target, re-centred on the car every frame
               (src/scene/SunRig.tsx) — the shadow camera only has to cover
@@ -99,12 +126,24 @@ export default function App() {
           <DebugCurveLine />
           <DebugCameraRig />
 
-          {/* No `pixelated` — that flag applies image-rendering:pixelated
-              whenever DPR drops during movement, which on a scroll-driven site
-              is constantly, and it would fight the SMAA pass on every scroll. */}
-          <AdaptiveDpr />
+          {/* Mounted only while driving: while stationary, this is the ONE
+              thing that would otherwise undo the full-quality parked shot
+              by scaling dpr down under any performance dip — the Canvas's
+              own dpr clamp ([1,2] above) never changes. No `pixelated` —
+              that flag applies image-rendering:pixelated whenever DPR
+              drops during movement, which on a scroll-driven site is
+              constantly, and it would fight the SMAA pass on every scroll. */}
+          {!isStationary && <AdaptiveDpr />}
           <Preload all />
-          <EffectComposer multisampling={0}>
+          {/* multisampling: real MSAA through the composer's render target,
+              on top of SMAA — expensive, so only while parked (leg 0/5) is
+              there no per-frame cost to protect (driving keeps the
+              original 0; SMAA alone carries the AA budget while moving).
+              Measured on this dev machine before picking the number: 8
+              samples cost too much even parked (mean fps fell to ~29 from
+              a ~52fps baseline); 4 lands at ~38fps, a real but tolerable
+              cost for a shot with no camera motion to feel it stutter. */}
+          <EffectComposer multisampling={isStationary ? 4 : 0}>
             <SMAA />
             {/* Not optional decoration: @react-three/fiber sets gl.toneMapping
                 to ACESFilmicToneMapping by default, but EffectComposer takes

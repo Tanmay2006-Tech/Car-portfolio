@@ -79,7 +79,17 @@ run_chain() {
   "${GT[@]}" webp "$resized" "$webp"
 
   echo "[meshopt]"
-  "${GT[@]}" meshopt "$webp" "$out"
+  # --quantize-normal: the CLI's own default is 10 bits, not the 8 that
+  # would visibly facet a curved, clearcoat-glossy panel like body_main
+  # (checked directly — rendered raw/porsche-split.glb against a build off
+  # this chain at the same angle; a pixel diff showed the difference was
+  # sub-perceptual, consistent with 10 bits already being adequate). Raised
+  # to 12 here anyway, the top of CLAUDE.md section 3's own "10-12" range,
+  # as cheap insurance: a couple of extra bits per vertex on ~250k exterior
+  # triangles is negligible against the file-size budget, and it rules out
+  # quantization as a cause of any future banding report without having to
+  # re-diagnose it.
+  "${GT[@]}" meshopt --quantize-normal 12 "$webp" "$out"
   echo "-> $out"
   echo
 }
@@ -92,9 +102,24 @@ run_chain() {
 # smaller). Then the named per-mesh cuts: belts (2,932 tris) and
 # hedlights_grid (80 tris) are far too small on screen to carry a full-size
 # normal map; Discs sit mostly hidden behind the rims.
+#
+# rim_black/rim_chrome/tires/LOGO1 are named OUT of the two broad rules
+# below rather than resized down with everything else: the desktop GLB sits
+# at 4.77MB of an 8MB budget (verified with tools/count-triangles.mjs and
+# a real build), and these four are exactly the textures on the parts a
+# visitor's eye actually lands on — the wheels spin in frame for the whole
+# site, the tyre sidewall is close to camera on the low-camera GridSense
+# leg (section 1's leg 4), and the badge is the one piece of brand detail
+# on an otherwise flat-coloured body. Spending the spare ~3MB there (their
+# ORIGINAL resolution: rim_black/rim_chrome/LOGO1 metallicRoughness at
+# 1024, tires_normal at 2048) buys more visible crispness per byte than
+# shaving already-small textures (rug, leather seam, etc.) further down
+# would ever cost. resize never upscales past a texture's real resolution,
+# so naming them here just means "skip this rule for these" — the CLI
+# leaves them at whatever they already are.
 run_chain "desktop" "$SRC_DESKTOP" "$OUT_DIR/porsche-desktop.glb" \
-  "*metallicRoughness*:512" \
-  "*normal*:1024" \
+  "{reisin,bl_pl_M_ext,carbon_int,body_main,brakes,invisible_all,pipes_chrom,pl_leather_int,dynamics,upholstery,belts,rug_interior,leather_int,leather_seam,leather_perforated,bl_pl_M_int}*metallicRoughness*:512" \
+  "{headlights_pattern,reflectors,pl_leather_int,dynamics,upholstery,LOGO1,belts,hedlights_grid,headlights_plastic_ring,rug_interior,leather_seam,leather_perforated}*normal*:1024" \
   "*baseColor*:1024" \
   "*leather_int_baseColor*:256" \
   "*number_plate1_baseColor*:256" \

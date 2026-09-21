@@ -61,6 +61,18 @@ const BRAKE_GLOW_MAX = 2.5 // above the baked default of 1 — a deliberate
 // the way a higher deadzone would. Pitch keeps reading the unsmoothed `accel`.
 const BRAKE_ACCEL_LAMBDA = 12
 const BRAKE_DECEL_DEADZONE = 6
+// App.tsx's <Environment environmentIntensity={0.35}> turns the HDRI down
+// scene-wide to protect --verge's ground colour from being washed out
+// (CLAUDE.md section 2's HDRI note). three.js multiplies that scene-wide
+// factor by each material's own envMapIntensity (default 1) to get the
+// final IBL contribution, so 0.35 is quietly dimming the car's reflections
+// too even though it was only ever meant to fix the ground. Setting
+// envMapIntensity here to the exact reciprocal cancels that scene-wide
+// dim for the car ONLY — Ground.tsx never touches envMapIntensity, so the
+// ground stays at the protected 0.35 while the car reads at full strength.
+const CAR_ENV_MAP_INTENSITY = 1 / 0.35
+const BODY_CLEARCOAT = 1
+const BODY_CLEARCOAT_ROUGHNESS = 0.05
 const WHEEL_NAMES = ['FL', 'FR', 'RL', 'RR'] as const
 type WheelKey = (typeof WHEEL_NAMES)[number]
 
@@ -124,6 +136,16 @@ export function Car() {
     const bodyMain = materials.body_main as THREE.MeshPhysicalMaterial | undefined
     bodyMain?.color.setStyle(GUARDS, THREE.SRGBColorSpace)
 
+    // body_main ships with no clearcoat at all (CLAUDE.md section 3 — only
+    // LOGO1's badge material carries KHR_materials_clearcoat). A lacquered
+    // clearcoat layer on top of the base coat is what makes automotive
+    // paint read as smooth, wet-looking paint instead of matte plastic, so
+    // it's added here as a material constant rather than a texture edit.
+    if (bodyMain) {
+      bodyMain.clearcoat = BODY_CLEARCOAT
+      bodyMain.clearcoatRoughness = BODY_CLEARCOAT_ROUGHNESS
+    }
+
     // Baked emissiveIntensity=1 reads as "always on" the moment the model
     // loads. Off until useFrame below has an actual braking event to show.
     const tailLight = materials.red_light_main as THREE.MeshStandardMaterial | undefined
@@ -133,12 +155,17 @@ export function Car() {
     // only reuse the parsed geometry/material references), so shadow flags
     // have to be set on this rendered tree directly — setting them on the
     // nodes map from useGLTF wouldn't touch what's actually mounted here.
+    // envMapIntensity is set in this same traversal, on every material
+    // reachable from the car (paint, chrome, glass, wheels — all of them,
+    // per CLAUDE.md's "car's materials", not just body_main), for the same
+    // reason: the mounted mesh/material instances are what actually render.
     modelRef.current?.traverse((object) => {
       const mesh = object as THREE.Mesh
-      if (mesh.isMesh) {
-        mesh.castShadow = true
-        mesh.receiveShadow = true
-      }
+      if (!mesh.isMesh) return
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      const material = mesh.material as THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | undefined
+      if (material) material.envMapIntensity = CAR_ENV_MAP_INTENSITY
     })
 
     // Wheel radius, read not guessed (CLAUDE.md section 5): ground is at

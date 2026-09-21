@@ -523,3 +523,18 @@ In sequence. Verify each before moving on.
 
 - Model credit: "Porsche 911 with interior by n.brizitskaya, CC BY 4.0", linking to the Sketchfab page. **Required by the licence.**
 - Porsche is a trademark of Dr. Ing. h.c. F. Porsche AG. A personal non-commercial portfolio is low risk, but don't imply endorsement and don't use Porsche's crest, wordmark, or official typeface.
+
+---
+
+## Status
+
+**2026-09-21 — Car visual quality pass.** Diagnosed and fixed all four items:
+
+1. **Normal quantization** — the meshopt step's own default was already 10 bits, not 8; a raw-vs-optimised pixel diff at a grazing angle on body_main showed the gap was sub-perceptual even before this. Raised explicitly to 12 (`--quantize-normal 12` in `tools/optimize.sh`) anyway as cheap insurance.
+2. **Clearcoat** — `body_main` shipped with none (only `LOGO1`'s badge material had it). Added `clearcoat=1`, `clearcoatRoughness=0.05` in `Car.tsx`'s material setup, since the source `.glb` has no baseColorTexture to edit.
+3. **Reflections** — `environmentIntensity={0.35}` on `<Environment>` dims the HDRI scene-wide to protect `--verge`'s ground colour. Every car material now sets `envMapIntensity = 1/0.35` in the same traversal, cancelling that dim for the car only; `Ground.tsx` is untouched and stays at the protected 0.35.
+4. **Anti-aliasing** — added a `useQuality` store (`src/scene/quality.ts`) written by `QualityMonitor.tsx` from `scroll.progress`, true only during leg 0/5 (`LEG_START[1]`/`LEG_START[5]`). While stationary: `<AdaptiveDpr>` is unmounted (so dpr can't be scaled below the device's native ratio) and `EffectComposer`'s `multisampling` goes from 0 to 4. **Measured, not assumed**: forcing `dpr` to a literal `2` (rather than leaving the `[1,2]` clamp alone) was tried first and cost an order of magnitude — parked fps fell from ~52 to ~7–15 on this dev machine, because its real `devicePixelRatio` is 1 and a literal 2 forced 4x the native pixel count. Fixed by never touching the `dpr` prop and only toggling `AdaptiveDpr`. `multisampling={8}` was also tried and measured (~29fps parked) before settling on `multisampling={4}` (~36–38fps parked) as the better cost/quality trade-off. Driving fps is unaffected (~52–53fps mean, matching pre-pass numbers) since all four changes are inert once the car starts moving.
+
+Also spent the desktop GLB's slack (4.77MB → ~4.80MB of the 8MB budget) on wheel, tyre and badge textures (`rim_black`/`rim_chrome`/`tires`/`LOGO1` metallicRoughness kept at their original 1024, `tires_normal` kept at 2048) by naming them out of `optimize.sh`'s broad resize rules instead of resizing everything uniformly.
+
+Before/after screenshots at the same hero angle: `screenshots/quality-before.png` / `quality-after.png` (full frame) and `-crop.png` (zoomed on the rear deck/roof, where clearcoat + reflections + AA are most visible).

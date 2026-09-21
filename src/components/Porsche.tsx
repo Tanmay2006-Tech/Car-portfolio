@@ -362,32 +362,25 @@ export function Model(props: JSX.IntrinsicElements['group']) {
               </group>
             </group>
           </group>
-          {/* Named so Car.tsx can find these four with getObjectByName and
-              drive them — gltfjsx didn't name these groups on its own (no
-              `name=` prop survives -K unless the source node had one), and
-              our wheels came from prepare-model.mjs's programmatic split
-              rather than a Blender pass, so nothing upstream named them
-              either. Rotating one of these spins that wheel about its own
-              axle (CLAUDE.md section 3's whole point of separating them). */}
-          <group name="wheel_FL" position={[-1.038, 0.189, -0.778]}>
+          <group position={[-1.038, 0.189, -0.778]}>
             <mesh geometry={nodes.wheel_FL_wheel_rim_rim_black_0.geometry} material={materials.rim_black} position={[0, 0, -0.009]} scale={0.266} />
             <mesh geometry={nodes.wheel_FL_wheel_rim_rim_chrome_0.geometry} material={materials.rim_chrome} position={[0, 0, -0.115]} scale={0.272} />
             <mesh geometry={nodes.wheel_FL_AO_tire_main_tires_0.geometry} material={materials.tires} scale={0.336} />
             <mesh geometry={nodes.wheel_FL_discs_Discs_0.geometry} material={materials.Discs} position={[0, 0, -0.034]} scale={0.21} />
           </group>
-          <group name="wheel_FR" position={[-1.038, 0.189, 0.778]}>
+          <group position={[-1.038, 0.189, 0.778]}>
             <mesh geometry={nodes.wheel_FR_wheel_rim_rim_black_0.geometry} material={materials.rim_black} position={[0, 0, 0.009]} scale={0.266} />
             <mesh geometry={nodes.wheel_FR_wheel_rim_rim_chrome_0.geometry} material={materials.rim_chrome} position={[0, 0, 0.115]} scale={0.272} />
             <mesh geometry={nodes.wheel_FR_AO_tire_main_tires_0.geometry} material={materials.tires} scale={0.336} />
             <mesh geometry={nodes.wheel_FR_discs_Discs_0.geometry} material={materials.Discs} position={[0, 0, 0.034]} scale={0.21} />
           </group>
-          <group name="wheel_RL" position={[-3.489, 0.194, -0.785]}>
+          <group position={[-3.489, 0.194, -0.785]}>
             <mesh geometry={nodes.wheel_RL_wheel_rim_rim_black_0.geometry} material={materials.rim_black} position={[0, -0.001, -0.003]} scale={0.28} />
             <mesh geometry={nodes.wheel_RL_wheel_rim_rim_chrome_0.geometry} material={materials.rim_chrome} position={[0, -0.001, -0.146]} scale={0.286} />
             <mesh geometry={nodes.wheel_RL_AO_tire_main_tires_0.geometry} material={materials.tires} scale={0.354} />
             <mesh geometry={nodes.wheel_RL_discs_Discs_0.geometry} material={materials.Discs} position={[0, -0.001, -0.023]} scale={0.196} />
           </group>
-          <group name="wheel_RR" position={[-3.489, 0.194, 0.785]}>
+          <group position={[-3.489, 0.194, 0.785]}>
             <mesh geometry={nodes.wheel_RR_wheel_rim_rim_black_0.geometry} material={materials.rim_black} position={[0, -0.001, 0.003]} scale={0.28} />
             <mesh geometry={nodes.wheel_RR_wheel_rim_rim_chrome_0.geometry} material={materials.rim_chrome} position={[0, -0.001, 0.146]} scale={0.286} />
             <mesh geometry={nodes.wheel_RR_AO_tire_main_tires_0.geometry} material={materials.tires} scale={0.354} />
