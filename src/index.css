@@ -1,0 +1,49 @@
+:root {
+  /* Dawn palette — CLAUDE.md section 2. The world is pastel, the car is
+     saturated; --guards (Guards Red) is rationed to car paint + one CTA. */
+  --dawn-high: #a9bfd6;
+  --dawn-low: #f7dcc2;
+  --asphalt: #cdc7ce;
+  --verge: #b7d3bf;
+  --ink: #2b2733;
+  --guards: #d0111b;
+
+  --font-display: 'Jost Variable', system-ui, sans-serif;
+  --font-body: 'Archivo Variable', system-ui, sans-serif;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--dawn-low);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--guards);
+  outline-offset: 2px;
+}
