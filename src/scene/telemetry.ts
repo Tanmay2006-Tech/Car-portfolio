@@ -13,4 +13,8 @@ export const telemetry = {
   brakeGlow: 0,
   camDist: 0, // camera-to-aim distance, written by ChaseCamera
   fps: 0,
+  // Ignition self-test (CLAUDE.md section 1 phase B) — revs to a peak then
+  // settles to idle. This IS the needle sweep: the debug/telemetry HUD
+  // waking up, not a separate element.
+  rpm: 0,
 }

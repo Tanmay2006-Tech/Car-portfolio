@@ -7,6 +7,7 @@ import { ToneMappingMode } from 'postprocessing'
 
 import { Car } from './scene/Car'
 import { ChaseCamera } from './scene/ChaseCamera'
+import { HERO } from './scene/cameraShots'
 import { SunRig } from './scene/SunRig'
 import { QualityMonitor } from './scene/QualityMonitor'
 import { useQuality } from './scene/quality'
@@ -19,7 +20,9 @@ import { DebugCurveLine } from './scene/DebugCurveLine'
 import { DebugCameraRig } from './scene/DebugCameraRig'
 import { ScrollSetup } from './scene/ScrollSetup'
 import { DebugHud } from './scene/DebugHud'
-import { PLACEHOLDER_PAGE_HEIGHT_PX } from './scene/scrollState'
+import { HeroOverlay } from './scene/HeroOverlay'
+import { ModelLoader } from './scene/ModelLoader'
+import { PAGE_HEIGHT_PX } from './scene/scrollState'
 
 // Confirmed: THREE.ColorManagement.enabled defaults true (three@0.186.0),
 // and nothing in this codebase sets it false. Asserted here rather than
@@ -42,6 +45,26 @@ const fogColor = srgb(DAWN_LOW)
 // of it, not the near view.
 const FOG_NEAR = 40
 const FOG_FAR = 180
+
+// Static initial framing for the very first paint, before Car/ChaseCamera
+// have mounted (they're inside a Suspense boundary gated on the GLB —
+// CLAUDE.md section 1: "text renders first, the car fades in when
+// loaded"). Ground/road/sky ARE visible immediately though, so the camera
+// needs a sane orientation from frame one rather than three.js's rotation-
+// identity default. Same formula ChaseCamera uses for its `ideal` position
+// (CHASE_CAMERA's own math), evaluated once here at rest (car heading 0,
+// position the world origin — which is exactly where carPose defaults to
+// before Car ever writes a real value, so this is already numerically
+// correct, not just a placeholder). Skips the stage-bias lookAt shift
+// ChaseCamera applies every frame — that's a sub-second cosmetic gap while
+// the GLB streams in, corrected the instant ChaseCamera takes over.
+const heroAzRad = THREE.MathUtils.degToRad(HERO.azimuthDeg)
+const HERO_CAMERA_POSITION: [number, number, number] = [
+  HERO.aimX - HERO.radius * Math.cos(heroAzRad),
+  HERO.height,
+  HERO.aimZ + HERO.radius * Math.sin(heroAzRad),
+]
+const HERO_CAMERA_LOOKAT: [number, number, number] = [HERO.aimX, HERO.aimY, HERO.aimZ]
 
 export default function App() {
   // Leg 0/5 only (src/scene/QualityMonitor.tsx) — the car isn't moving, so
@@ -75,13 +98,14 @@ export default function App() {
         <Canvas
           shadows="soft"
           dpr={[1, 2]}
-          camera={{ position: [4.2, 1.6, 4.8], fov: 35 }}
+          camera={{ position: HERO_CAMERA_POSITION, fov: HERO.fov }}
           gl={{ antialias: false }}
-          onCreated={({ gl, scene }) => {
+          onCreated={({ gl, scene, camera }) => {
             console.assert(
               gl.outputColorSpace === THREE.SRGBColorSpace,
               'renderer.outputColorSpace must be SRGBColorSpace or colours display wrong.',
             )
+            camera.lookAt(...HERO_CAMERA_LOOKAT)
             // Debug-only: lets diagnostic scripts under tools/ read real
             // renderer.info (draw calls, triangles) instead of guessing from
             // source.
@@ -169,17 +193,25 @@ export default function App() {
       <ScrollSetup />
       <DebugHud />
 
-      {/* Placeholder scroll length until PROMPTS.md step 7 builds the real
-          leg sections — their stacked height becomes the actual scroll
-          distance then. This just gives ScrollSetup's ScrollTrigger
-          something to measure against so scroll.progress has a 0-1 range
-          to drive the car through today. Transparent: the fixed canvas
-          above is what's actually seen.
+      {/* DOM, not Canvas children — CLAUDE.md section 1: hero text must
+          render immediately regardless of GLB load state, and the loader
+          is deliberately a separate element from it, not a splash screen
+          gating the hero. */}
+      <HeroOverlay />
+      <ModelLoader />
 
-          Height comes from PLACEHOLDER_PAGE_HEIGHT_PX, not a vh unit —
-          see scrollState.ts for why the exact number is load-bearing (it's
-          what makes a normal scroll pace equal a normal driving speed). */}
-      <div id="page" style={{ height: `${PLACEHOLDER_PAGE_HEIGHT_PX}px` }} />
+      {/* Scroll length until PROMPTS.md step 7 builds the real leg
+          sections — their stacked height becomes the actual scroll
+          distance then, still split the same way (hero + cold start +
+          route). This just gives ScrollSetup's ScrollTrigger something to
+          measure against. Transparent: the fixed canvas above is what's
+          actually seen.
+
+          Height is PAGE_HEIGHT_PX (HERO_PX + COLD_START_PX + ROUTE_PX),
+          not a vh unit — see scrollState.ts for why ROUTE_PX specifically
+          is load-bearing (it's what makes a normal scroll pace equal a
+          normal driving speed; HERO_PX/COLD_START_PX can move freely). */}
+      <div id="page" style={{ height: `${PAGE_HEIGHT_PX}px` }} />
     </>
   )
 }

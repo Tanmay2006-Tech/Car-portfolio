@@ -4,7 +4,7 @@ import { ContactShadows, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 
 import { Model as PorscheModel } from '../components/Porsche'
-import { GUARDS } from './colors'
+import { GUARDS, srgb } from './colors'
 import { carPose } from './carPose'
 import { ROUTE_CURVE } from './curve'
 import { scroll } from './scrollState'
@@ -73,6 +73,23 @@ const BRAKE_DECEL_DEADZONE = 6
 const CAR_ENV_MAP_INTENSITY = 1 / 0.35
 const BODY_CLEARCOAT = 1
 const BODY_CLEARCOAT_ROUGHNESS = 0.05
+// Car.tsx section 1's opening (CLAUDE.md): phase A/B are parked, engine and
+// lights off; phase B's "ignition self-test" is these three cues plus the
+// telemetry HUD's rpm sweep (DebugHud.tsx). All of them are pure functions
+// of the current scroll.phase/phaseProgress, not one-way ratchets, so
+// scrolling back up genuinely reverses the ignition — matching CLAUDE.md's
+// "scroll-scrubbed and reversible."
+const HEADLIGHT_ON_START = 0.35 // fraction of the cold-start budget where the ramp begins
+const HEADLIGHT_ON_END = 0.55 // fully lit by here — well before the camera finishes arriving at CHASE
+const HEADLIGHT_INTENSITY = 3 // matches BRAKE_GLOW_MAX's order of magnitude — bright enough to read against the pastel scene
+// No emissive texture on `lights` (unlike red_light_main, which bakes one
+// in) — CLAUDE.md section 3 only lists red_light_back as pre-lit, so the
+// headlight colour has to be set explicitly rather than just brightening a
+// baked map.
+const HEADLIGHT_COLOR = '#fff2dc'
+const IGNITION_PEAK_RPM = 6500
+const IDLE_RPM = 850
+const FADE_IN_LAMBDA = 4 // ~0.5-0.8s to fully opaque — CLAUDE.md section 1: "the car fades in when loaded"
 const WHEEL_NAMES = ['FL', 'FR', 'RL', 'RR'] as const
 type WheelKey = (typeof WHEEL_NAMES)[number]
 
@@ -122,6 +139,13 @@ export function Car() {
   const fpsEma = useRef(60)
   const brakeGlow = useRef(0)
   const brakeAccel = useRef(0) // accel further smoothed for the brake light only — see BRAKE_ACCEL_LAMBDA
+  // Fade-in on mount (CLAUDE.md section 1: "the car fades in when loaded").
+  // The materials map from useGLTF is already the deduplicated set of all
+  // 37 unique material instances actually mounted — no need to re-collect
+  // it from a mesh traversal.
+  const fadeIn = useRef(0)
+  const fadeDone = useRef(false)
+  const fadeMaterials = useRef<THREE.Material[]>([])
   // Scratch, reused every frame instead of allocated — this runs inside
   // useFrame, so a `new THREE.Vector3()`/`new THREE.Quaternion()` here would
   // be a 60Hz allocation. three.js's own getPointAt/getTangentAt accept an
@@ -150,6 +174,29 @@ export function Car() {
     // loads. Off until useFrame below has an actual braking event to show.
     const tailLight = materials.red_light_main as THREE.MeshStandardMaterial | undefined
     if (tailLight) tailLight.emissiveIntensity = 0
+
+    // Headlights (CLAUDE.md section 1 phase B): also shared by
+    // trans_covers_lights_0, the lens cover over the same bulb, so both lens
+    // and housing light up together — physically correct, and no special
+    // casing needed. No baked emissive map here (unlike the tail light), so
+    // the colour itself has to be set, not just its intensity.
+    const headlights = materials.lights as THREE.MeshPhysicalMaterial | undefined
+    if (headlights) {
+      headlights.emissive.copy(srgb(HEADLIGHT_COLOR))
+      headlights.emissiveIntensity = 0
+    }
+
+    // Fade-in on mount: every material starts fully transparent, then
+    // useFrame ramps opacity 0->1 and restores each material's original
+    // `transparent` flag once done, so the rest of the session doesn't pay
+    // for transparent-object sort order on an opaque car body.
+    const allMaterials = Object.values(materials) as THREE.Material[]
+    for (const material of allMaterials) {
+      material.userData.__preFadeTransparent = material.transparent
+      material.transparent = true
+      material.opacity = 0
+    }
+    fadeMaterials.current = allMaterials
 
     // gltfjsx's generated <mesh> elements are fresh Object3D instances (they
     // only reuse the parsed geometry/material references), so shadow flags
@@ -191,7 +238,7 @@ export function Car() {
     ;(window as unknown as { __appReady?: boolean }).__appReady = true
   }, [materials])
 
-  useFrame((_, rawDelta) => {
+  useFrame((state, rawDelta) => {
     const root = rootRef.current
     const dynamics = dynamicsRef.current
     if (!root || !dynamics) return
@@ -200,7 +247,27 @@ export function Car() {
     // giant catch-up step would snap the car across half the route.
     const dt = Math.min(rawDelta, 1 / 15)
 
-    const p = THREE.MathUtils.clamp(scroll.progress, 0.0001, 0.9999)
+    // Fade-in: ramps once per mount, then stops touching these materials
+    // at all (fadeDone) rather than writing opacity=1/transparent=false
+    // every frame forever.
+    if (!fadeDone.current) {
+      fadeIn.current = THREE.MathUtils.damp(fadeIn.current, 1, FADE_IN_LAMBDA, dt)
+      for (const material of fadeMaterials.current) material.opacity = fadeIn.current
+      if (fadeIn.current > 0.995) {
+        fadeDone.current = true
+        for (const material of fadeMaterials.current) {
+          material.opacity = 1
+          material.transparent = (material.userData.__preFadeTransparent as boolean) ?? false
+        }
+      }
+    }
+
+    // routeP, not raw scroll.progress: CLAUDE.md section 1's opening splits
+    // the page into hero + cold-start + route budgets (scrollState.ts), and
+    // routeP is already 0 for the first two and real curve progress only
+    // once scroll passes into the route budget — the car stays parked at
+    // the route's start through both hero and cold start.
+    const p = THREE.MathUtils.clamp(scroll.routeP, 0.0001, 0.9999)
     const pos = ROUTE_CURVE.getPointAt(p, scratchPos.current)
 
     if (prevPos.current === null) {
@@ -271,6 +338,22 @@ export function Car() {
     dynamics.rotation.x = THREE.MathUtils.damp(dynamics.rotation.x, rollTarget, DYNAMICS_LAMBDA, dt)
     dynamics.rotation.z = THREE.MathUtils.damp(dynamics.rotation.z, pitchTarget, DYNAMICS_LAMBDA, dt)
 
+    // Idle shudder (CLAUDE.md section 1 phase B): additive on top of the
+    // roll/pitch above, not a replacement for it — small enough that it
+    // reads as engine vibration through a parked chassis, not body roll.
+    // Envelope rises over the first 15% of the cold-start budget, holds,
+    // then fades over the last 15% so it's gone by the time the car
+    // actually pulls away — a pure function of scroll.phase/phaseProgress,
+    // so it's exactly as reversible as everything else in this phase.
+    if (scroll.phase === 'coldstart') {
+      const envelope =
+        THREE.MathUtils.smootherstep(scroll.phaseProgress, 0, 0.15) *
+        (1 - THREE.MathUtils.smootherstep(scroll.phaseProgress, 0.85, 1))
+      const t = state.clock.elapsedTime
+      dynamics.rotation.x += (Math.sin(t * 47) * 0.0025 + Math.sin(t * 83) * 0.0012) * envelope
+      dynamics.rotation.z += Math.cos(t * 39) * 0.0018 * envelope
+    }
+
     // Tail lights: same accel signal as pitch, but only its braking
     // (decelerating) half, and only this material — nothing else reads it.
     const tailLight = materials.red_light_main as THREE.MeshStandardMaterial | undefined
@@ -280,6 +363,36 @@ export function Car() {
       const brakeTarget = THREE.MathUtils.clamp(decel * BRAKE_GLOW_GAIN, 0, BRAKE_GLOW_MAX)
       brakeGlow.current = THREE.MathUtils.damp(brakeGlow.current, brakeTarget, BRAKE_GLOW_LAMBDA, dt)
       tailLight.emissiveIntensity = brakeGlow.current
+    }
+
+    // Headlights: off through the hero phase (engine and lights off),
+    // ramp on partway through cold start, stay on for the rest of the
+    // drive. Pure function of scroll.phase/phaseProgress — reversible.
+    const headlights = materials.lights as THREE.MeshPhysicalMaterial | undefined
+    if (headlights) {
+      const headlightOn =
+        scroll.phase === 'route'
+          ? 1
+          : scroll.phase === 'coldstart'
+            ? THREE.MathUtils.smootherstep(scroll.phaseProgress, HEADLIGHT_ON_START, HEADLIGHT_ON_END)
+            : 0
+      headlights.emissiveIntensity = headlightOn * HEADLIGHT_INTENSITY
+    }
+
+    // rpm: the ignition self-test's own number, and the thing the debug/
+    // telemetry HUD's needle sweep (DebugHud.tsx) actually reads — "the
+    // leg 2 telemetry HUD waking up, not a separate element" per CLAUDE.md
+    // section 1. Revs to a peak over the first ~22% of cold start, falls
+    // back to a steady idle by ~60%, and holds idle through the drive
+    // (this project doesn't otherwise model engine rpm against speed).
+    if (scroll.phase === 'hero') {
+      telemetry.rpm = 0
+    } else if (scroll.phase === 'coldstart') {
+      const rise = THREE.MathUtils.smootherstep(scroll.phaseProgress, 0, 0.22)
+      const fall = THREE.MathUtils.smootherstep(scroll.phaseProgress, 0.22, 0.6)
+      telemetry.rpm = THREE.MathUtils.lerp(0, IGNITION_PEAK_RPM, rise) * (1 - fall) + IDLE_RPM * fall
+    } else {
+      telemetry.rpm = IDLE_RPM
     }
 
     prevPos.current.copy(pos)

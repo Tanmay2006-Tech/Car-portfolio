@@ -203,13 +203,30 @@ Read sections 1 and 2 of CLAUDE.md.
 
 Build leg 0 and leg 5 — the hardest two, per section 9.
 
-Leg 0, the cold start:
-- Instrument needle sweep driven by drei's useProgress() — the loading
-  screen IS the hero animation, not a spinner
-- Needles sweep to max and fall back, cluster wakes, readout resolves to
-  TANMAY TRIPATHI
-- Headlights come on a beat later (headlights_flash_lights_0 exists)
-- Then the car pulls away
+Leg 0 is three beats, not one — CLAUDE.md section 1's "The opening":
+
+A. On load, no scroll: a real landing page. Static low three-quarter
+   FRONT shot, car off-axis right, engine and lights off. Hero text
+   (name, role, one-line summary, links) is real DOM and renders
+   immediately — it must not wait on the GLB. The car itself fades in
+   once the model has loaded. Keep a minimal, separate loading
+   indicator for that gap; it is not a splash screen and does not gate
+   the hero.
+
+B. First scroll, scroll-scrubbed and reversible: the cold start. Hero
+   text eases out, camera swings from the hero shot to the chase shot.
+   Needle sweep, headlights on (headlights_flash_lights_0), faint idle
+   shudder. Car still parked. The needle sweep is the leg 2 telemetry
+   HUD waking up — revs to a peak, settles to idle — not a separate
+   name-reveal element; the name is already in the hero from beat A.
+
+C. More scroll: the car pulls away, ordinary route driving.
+
+Split the page's scroll height into three named px constants — HERO_PX,
+COLD_START_PX, ROUTE_PX — summed for the total. ROUTE_PX must keep
+whatever px-per-metre the route currently calibrates to (verify against
+the HUD's speed readout on a steady scroll — see tools/measure-speed.mjs)
+or the 60km/h cruise breaks; HERO_PX and COLD_START_PX are free to tune.
 
 Leg 5, the cabin:
 - Car decelerates and stops

@@ -3,33 +3,55 @@
 // Car.tsx). CLAUDE.md section 5: "One mutable object, written by
 // ScrollTrigger, read by useFrame. Zero React re-renders while
 // scrolling... it's the mistake almost everyone makes."
+export type ScrollPhase = 'hero' | 'coldstart' | 'route'
+
 export const scroll = {
+  // Raw ScrollTrigger fraction over the WHOLE page (0-1), exactly as before.
   progress: 0,
   velocity: 0,
   section: 0,
+  // Derived every update from `progress` and the three px budgets below —
+  // see windowProgress(). `phase` says which budget the scroll position is
+  // currently inside; `phaseProgress` is 0-1 WITHIN that budget.
+  phase: 'hero' as ScrollPhase,
+  phaseProgress: 0,
+  // Curve progress for Car.tsx/ChaseCamera.tsx: 0 for the entire hero and
+  // cold-start budgets (the car doesn't move yet), then 0-1 across
+  // ROUTE_PX. This is what carPose.progress ends up holding — everything
+  // that used to read raw `scroll.progress` as the curve parameter now
+  // reads this instead.
+  routeP: 0,
 }
 
-// LOAD-BEARING NUMBER, not a layout nicety. scroll.progress (0-1) always
-// maps onto the *entire* route (curve.ts: ROUTE_CURVE.getLength() ===
-// 952.8m), because Car.tsx drives position from `curve.getPointAt(p)`
-// directly. That means this height is the only thing that decides how
-// fast the car goes at a normal scroll pace — page-height and car-speed
-// are the same number wearing two hats.
+// CLAUDE.md section 1's new opening: a static landing page (no scroll), a
+// scroll-scrubbed cold-start ignition sequence (car still parked), then the
+// drive. Three sequential pixel budgets, summing to the page's total
+// scrollable height — named constants so each phase's length is a single
+// edit, not a magic number buried in a calculation.
 //
-// Get this wrong (as the first cut did, at 800vh — roughly 7,200px on a
-// typical viewport) and the car covers 952m in a handful of mouse-wheel
-// notches: ~30x too fast, and since wheel spin, steering, roll and pitch
-// all derive from speed, every one of them is wrong by that same factor
-// and none of them can be tuned until this number is right.
-//
-// Sized for a ~60 km/h (16.7 m/s) cruise at a normal continuous scroll
-// rate: 952.8m / 16.7m/s ≈ 57s of scrolling end to end, which at a
-// typical smooth-scroll rate of a few hundred px/s lands in the
-// 25,000-30,000px range. Verified against a simulated steady scroll in
-// tools/measure-speed.mjs, which is the thing to rerun if this ever moves.
-//
-// PROMPTS.md step 7 replaces the placeholder `#page` spacer this sizes
-// (see App.tsx) with real stacked leg sections — whoever does that needs
-// their combined height to land in the same neighbourhood, or bake an
-// equivalent speed correction in on purpose, not by accident.
-export const PLACEHOLDER_PAGE_HEIGHT_PX = 28_000
+//   HERO_PX       static landing page retreats: hero DOM text eases out,
+//                 camera starts drifting off the hero shot toward chase.
+//   COLD_START_PX ignition self-test finishes: needle sweep (the debug/
+//                 telemetry HUD waking up), headlights on, idle shudder,
+//                 camera arrives at the chase position. Car still parked
+//                 at the route's start (curve p=0) throughout both of the
+//                 above — only ROUTE_PX moves it.
+//   ROUTE_PX      the drive. UNCHANGED from the prior single-phase
+//                 PLACEHOLDER_PAGE_HEIGHT_PX value — this is the number
+//                 that calibrates the 60km/h cruise (see the derivation
+//                 this constant used to carry, and tools/measure-speed.mjs,
+//                 the thing to rerun if it ever moves). Moving HERO_PX or
+//                 COLD_START_PX must never change this one.
+export const HERO_PX = 700
+export const COLD_START_PX = 2200
+export const ROUTE_PX = 28_000
+export const PAGE_HEIGHT_PX = HERO_PX + COLD_START_PX + ROUTE_PX
+
+// 0-1 fraction of the [startPx, startPx + lengthPx) window, given the
+// current absolute scroll position in pixels. The one piece of math every
+// phase-specific consumer (hero fade, ignition rig, the route curve)
+// shares, so the three budgets above only have to be defined once and
+// every consumer stays in sync with them automatically.
+export function windowProgress(scrollPxNow: number, startPx: number, lengthPx: number): number {
+  return Math.min(1, Math.max(0, (scrollPxNow - startPx) / lengthPx))
+}

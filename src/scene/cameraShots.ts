@@ -21,9 +21,20 @@ export interface Shot {
   stageBias: number
 }
 
+// Phase A (CLAUDE.md section 1): the static landing-page shot. Low three-
+// quarter FRONT (azimuth near 180 = directly in front; this sits toward the
+// passenger-front corner so the grille and one flank both read), car off-
+// axis right of the stage per section 2's layout — same stageBias sign as
+// CHASE below, so the hand-off during the cold-start blend doesn't also
+// have to cross the frame's centre line.
+export const HERO: Shot = { azimuthDeg: 160, radius: 6.2, height: 0.95, aimX: 0.1, aimY: 0.6, aimZ: 0, fov: 32, stageBias: 0.32 }
+
 // Rear three-quarter, low. The default for legs 0, 2 and 3: a low camera reads
 // fast and planted, a centred one reads like a product shot (CLAUDE.md section 2).
-const CHASE: Shot = { azimuthDeg: 14, radius: 7, height: 1.25, aimX: 0.4, aimY: 0.7, aimZ: 0, fov: 35, stageBias: 0.3 }
+// Exported so ChaseCamera's cold-start blend (HERO -> this exact shot) hands
+// off to precisely where the route's own opening keyframe already starts —
+// no seam between "cold start ends" and "leg 0 of the route begins".
+export const CHASE: Shot = { azimuthDeg: 14, radius: 7, height: 1.25, aimX: 0.4, aimY: 0.7, aimZ: 0, fov: 35, stageBias: 0.3 }
 
 // Leg 1: square to the car on the passenger side, low and parallel, like a
 // tracking shot from a camera car (CLAUDE.md section 1).
@@ -70,6 +81,13 @@ for (let i = 1; i < KEYFRAMES.length; i++) {
 
 const KEYS = ['azimuthDeg', 'radius', 'height', 'aimX', 'aimY', 'aimZ', 'fov', 'stageBias'] as const
 
+// Shared by sampleShot (route keyframes) and ChaseCamera's cold-start blend
+// (exactly two shots, HERO -> CHASE) — the same per-key lerp either way.
+export function lerpShot(a: Shot, b: Shot, t: number, out: Shot): Shot {
+  for (const key of KEYS) out[key] = THREE.MathUtils.lerp(a[key], b[key], t)
+  return out
+}
+
 export function sampleShot(progress: number, out: Shot): Shot {
   const p = THREE.MathUtils.clamp(progress, 0, 1)
   let i = 1
@@ -77,6 +95,5 @@ export function sampleShot(progress: number, out: Shot): Shot {
   const [pa, a] = KEYFRAMES[i - 1]
   const [pb, b] = KEYFRAMES[i]
   const t = pb > pa ? THREE.MathUtils.smootherstep(THREE.MathUtils.clamp((p - pa) / (pb - pa), 0, 1), 0, 1) : 1
-  for (const key of KEYS) out[key] = THREE.MathUtils.lerp(a[key], b[key], t)
-  return out
+  return lerpShot(a, b, t, out)
 }

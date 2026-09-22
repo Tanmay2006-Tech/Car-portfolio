@@ -3,9 +3,11 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import { cameraState } from './cameraState'
-import { sampleShot, type Shot } from './cameraShots'
+import { sampleShot, lerpShot, HERO, CHASE } from './cameraShots'
+import type { Shot } from './cameraShots'
 import { carPose } from './carPose'
 import { telemetry } from './telemetry'
+import { scroll } from './scrollState'
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -54,7 +56,25 @@ export function ChaseCamera() {
     }
     const camera = state.camera as THREE.PerspectiveCamera
     const dt = Math.min(rawDelta, 1 / 15)
-    const s = sampleShot(carPose.progress, shot.current)
+
+    // CLAUDE.md section 1's opening: the hero and cold-start phases aren't
+    // on the route at all (carPose.progress sits at 0 throughout both, since
+    // Car.tsx only advances the curve once scroll.phase is 'route') — they
+    // get their own shot, blending HERO -> CHASE across the cold-start
+    // budget so the hand-off into the route's own opening keyframe (CHASE,
+    // at route progress 0) is seamless. Eased the same way sampleShot eases
+    // between route keyframes, so this reads as one continuous camera move
+    // rather than three differently-paced ones stitched together.
+    let s: Shot
+    if (scroll.phase === 'route') {
+      s = sampleShot(carPose.progress, shot.current)
+    } else {
+      // 'hero': t=0, pure HERO, held for the whole HERO_PX budget.
+      // 'coldstart': eases 0->1 across COLD_START_PX, arriving at exactly
+      // CHASE — the route's own progress-0 keyframe — by the time it ends.
+      const t = scroll.phase === 'coldstart' ? THREE.MathUtils.smootherstep(scroll.phaseProgress, 0, 1) : 0
+      s = lerpShot(HERO, CHASE, t, shot.current)
+    }
 
     // Orientation frame lags the car's heading (see CAMERA_YAW_LAMBDA).
     if (camYaw.current === null) camYaw.current = carPose.heading

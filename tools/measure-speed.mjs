@@ -48,8 +48,17 @@ async function main() {
   await page.waitForTimeout(500);
 
   // scrollState.ts's derivation: ~490px/s for a ~16.7 m/s (60km/h) cruise
-  // against a 28,000px page.
+  // against ROUTE_PX's 28,000px.
   const CRUISE_PX_PER_SEC = 490;
+
+  // CLAUDE.md section 1's opening now puts HERO_PX + COLD_START_PX (700 +
+  // 2200 = 2900px, scrollState.ts) of static-landing-page and ignition-
+  // sequence runway BEFORE the route starts — the car doesn't move at all
+  // until scroll clears that. Jump straight past it so this test still
+  // measures the thing it's actually for (the ROUTE_PX calibration), not
+  // however many bursts it takes to clear the new runway first.
+  await page.evaluate(() => window.scrollTo(0, 2900));
+  await page.waitForTimeout(300);
 
   // Read speed mid-drive, in short back-to-back bursts, not after the loop
   // stops — Lenis keeps easing (decelerating) for a moment once input

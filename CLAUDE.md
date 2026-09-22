@@ -22,14 +22,26 @@ A live telemetry HUD reads out as the car moves. That thread runs through the wo
 
 | Leg | Road state | Content | Car |
 |---|---|---|---|
-| 0 | Stationary, dawn, engine cold | Name, role, one line | Parked, idle shudder |
+| 0 | Stationary, dawn, engine cold — see "The opening" below | Name, role, one line, links | Parked, then idle shudder |
 | 1 | Straight stretch, section pinned | 5 projects, scrolling sideways | Accelerating, camera side-on |
 | 2 | Cruise | Skills as telemetry HUD | Steady |
 | 3 | Route markers passing | 4 internships, dated | Steady |
 | 4 | Road surface becomes the risk layer | GridSense + RiskPath + the paper | Slows, low camera |
 | 5 | Decelerates, stops | About + contact | **Camera enters cabin** |
 
-The car is stationary only at leg 0 and leg 5. It moves for everything between. That's also a performance win — the expensive interior geometry only needs to be in frame at the very end.
+The car is stationary through the whole of the opening (leg 0) and again at leg 5. It moves for everything between. That's also a performance win — the expensive interior geometry only needs to be in frame at the very end.
+
+### The opening
+
+Leg 0 is not one beat, it's three, and the third is the only one that scrolls the route:
+
+**A. On load, no scroll — a real landing page.** The car sits parked, engine and lights off, as the backdrop to actual page content: a static low three-quarter *front* shot, car off-axis on the right of the frame (section 2's 64% stage, same side CHASE keeps it on throughout the drive). The left column carries name, role, a one-line summary, and links (GitHub, LinkedIn, email, resume) — real DOM, per section 2's layout. This text must never wait on the GLB: it renders on first paint regardless of model-load state, and the car fades in once it's ready. A minimal, separate loading indicator (not styled as a splash screen, not gating the hero) covers the gap while the model streams in.
+
+**B. First scroll — the cold start.** Scroll-scrubbed and fully reversible, car still parked. The hero text eases out; the camera swings from the static hero shot to the driving chase shot. Alongside that: the ignition self-test (needle sweep), headlights on, a faint idle shudder through the chassis. The needle sweep is *not* a separate name-reveal element — the name already lives in the hero from beat A — it's the leg 2 telemetry HUD itself waking up: revs to a peak, settles to idle, and stays there until the car actually pulls away.
+
+**C. More scroll — the car pulls away.** Ordinary route driving, as described everywhere else in this document.
+
+The page's scroll height is split into three named pixel budgets — `HERO_PX` (A retreats), `COLD_START_PX` (B plays out), `ROUTE_PX` (C, the drive) — summed for the total scrollable height. `ROUTE_PX` is the one that calibrates the 60km/h cruise feel (scrollState.ts's own derivation); moving `HERO_PX` or `COLD_START_PX` must never change it.
 
 ### Leg 1: the projects run sideways
 
@@ -42,12 +54,6 @@ Three consequences that follow from that, and all three are requirements:
 - **Distance is shared.** Project marker spacing in world units and card spacing in pixels are derived from one constant. If a card is halfway across the screen, the car is halfway between markers. Any drift between them is instantly visible and ruins the effect.
 
 Five markers on this leg, not fifteen. See section 8 on curation.
-
-### Hero: the needle sweep
-
-Real cars run an instrument self-test on ignition — every needle sweeps to maximum and falls back. Use that as the name reveal, not a centered headline fading up. Gauges sweep, cluster wakes, readout resolves to `TANMAY TRIPATHI`. Headlights come on a beat later. Then it pulls away.
-
-This doubles as the loading screen: needle position is `useProgress()` from drei. The 3–6 seconds the model takes to arrive becomes content instead of a spinner.
 
 ### Skills as telemetry, not percentage bars
 
@@ -533,8 +539,20 @@ In sequence. Verify each before moving on.
 1. **Normal quantization** — the meshopt step's own default was already 10 bits, not 8; a raw-vs-optimised pixel diff at a grazing angle on body_main showed the gap was sub-perceptual even before this. Raised explicitly to 12 (`--quantize-normal 12` in `tools/optimize.sh`) anyway as cheap insurance.
 2. **Clearcoat** — `body_main` shipped with none (only `LOGO1`'s badge material had it). Added `clearcoat=1`, `clearcoatRoughness=0.05` in `Car.tsx`'s material setup, since the source `.glb` has no baseColorTexture to edit.
 3. **Reflections** — `environmentIntensity={0.35}` on `<Environment>` dims the HDRI scene-wide to protect `--verge`'s ground colour. Every car material now sets `envMapIntensity = 1/0.35` in the same traversal, cancelling that dim for the car only; `Ground.tsx` is untouched and stays at the protected 0.35.
-4. **Anti-aliasing** — added a `useQuality` store (`src/scene/quality.ts`) written by `QualityMonitor.tsx` from `scroll.progress`, true only during leg 0/5 (`LEG_START[1]`/`LEG_START[5]`). While stationary: `<AdaptiveDpr>` is unmounted (so dpr can't be scaled below the device's native ratio) and `EffectComposer`'s `multisampling` goes from 0 to 4. **Measured, not assumed**: forcing `dpr` to a literal `2` (rather than leaving the `[1,2]` clamp alone) was tried first and cost an order of magnitude — parked fps fell from ~52 to ~7–15 on this dev machine, because its real `devicePixelRatio` is 1 and a literal 2 forced 4x the native pixel count. Fixed by never touching the `dpr` prop and only toggling `AdaptiveDpr`. `multisampling={8}` was also tried and measured (~29fps parked) before settling on `multisampling={4}` (~36–38fps parked) as the better cost/quality trade-off. Driving fps is unaffected (~52–53fps mean, matching pre-pass numbers) since all four changes are inert once the car starts moving.
+4. **Anti-aliasing** — added a `useQuality` store (`src/scene/quality.ts`) written by `QualityMonitor.tsx`, true only during leg 0/5 of the route (`LEG_START[1]`/`LEG_START[5]`) — as of the opening-sequence pass below, also true for the whole hero/cold-start budget, since the car isn't moving there either. While stationary: `<AdaptiveDpr>` is unmounted (so dpr can't be scaled below the device's native ratio) and `EffectComposer`'s `multisampling` goes from 0 to 4. **Measured, not assumed**: forcing `dpr` to a literal `2` (rather than leaving the `[1,2]` clamp alone) was tried first and cost an order of magnitude — parked fps fell from ~52 to ~7–15 on this dev machine, because its real `devicePixelRatio` is 1 and a literal 2 forced 4x the native pixel count. Fixed by never touching the `dpr` prop and only toggling `AdaptiveDpr`. `multisampling={8}` was also tried and measured (~29fps parked) before settling on `multisampling={4}` (~36–38fps parked) as the better cost/quality trade-off. Driving fps is unaffected (~52–53fps mean, matching pre-pass numbers) since all four changes are inert once the car starts moving.
 
 Also spent the desktop GLB's slack (4.77MB → ~4.80MB of the 8MB budget) on wheel, tyre and badge textures (`rim_black`/`rim_chrome`/`tires`/`LOGO1` metallicRoughness kept at their original 1024, `tires_normal` kept at 2048) by naming them out of `optimize.sh`'s broad resize rules instead of resizing everything uniformly.
 
 Before/after screenshots at the same hero angle: `screenshots/quality-before.png` / `quality-after.png` (full frame) and `-crop.png` (zoomed on the rear deck/roof, where clearcoat + reflections + AA are most visible).
+
+**2026-09-22 — Opening redesign (hero / cold start / drive).** Rewrote CLAUDE.md section 1 and PROMPTS.md step 6 first, then built to match:
+
+- New `src/scene/HeroOverlay.tsx` (real DOM, mounts unconditionally — never waits on the GLB) and `src/scene/ModelLoader.tsx` (a separate, minimal `useProgress()` readout, not a splash screen). `Car.tsx` fades every material's opacity 0→1 on mount instead of popping in.
+- `scrollState.ts` now splits the page into three named px budgets — `HERO_PX` (700), `COLD_START_PX` (2200), `ROUTE_PX` (28,000, **unchanged** from the old single-phase constant) — and derives `scroll.phase`/`scroll.phaseProgress`/`scroll.routeP` each `ScrollTrigger` update (`ScrollSetup.tsx`). `Car.tsx` now drives the curve from `scroll.routeP` (0 through hero+cold-start, real progress only in the route budget) instead of raw `scroll.progress`.
+- `cameraShots.ts` gained a `HERO` shot (low three-quarter front, off-axis right) and an exported `lerpShot` helper; `ChaseCamera.tsx` holds `HERO` through the hero phase and blends `HERO → CHASE` across the cold-start budget, handing off exactly onto the route's own progress-0 keyframe.
+- `Car.tsx` also drives the ignition self-test: headlights (`materials.lights`, no baked emissive colour so one had to be set explicitly), a faint idle-shudder jitter on top of the roll/pitch dynamics, and `telemetry.rpm` (revs to a peak, settles to idle) — all pure functions of `scroll.phase`/`phaseProgress`, so scrolling backward genuinely reverses the sequence. `DebugHud.tsx` surfaces `phase`/`rpm` as the stand-in for "the leg 2 telemetry HUD waking up" — there's no separate needle-reveal element.
+- **Caught and fixed by the "verify with the HUD" check**: `QualityMonitor.tsx` was still comparing `LEG_START`'s route-relative thresholds against raw whole-page `scroll.progress`, which the new budgets made the wrong scale entirely (would have driven the parked-quality logic off the wrong signal). Fixed to check `scroll.phase !== 'route'` first, then `scroll.routeP` against `LEG_START`. `tools/measure-speed.mjs` also had to jump past the new `HERO_PX + COLD_START_PX` runway before starting its timed cruise measurement.
+- Calibration re-verified after the change: steady cruise reads 58.8–65.1 km/h (target ~60), roll peaks at 2.99° through the first bend (`ROLL_MAX_RAD` is 3°), braking decays to 0 within 2s — all matching pre-change numbers, confirming `ROUTE_PX` staying at 28,000 preserved the calibration.
+- One open gap: the hero's GitHub/LinkedIn links are `href="#"` placeholders (`HeroOverlay.tsx`) — the real URLs weren't discoverable in this repo or the live portfolio site's client-rendered markup, and were asked for rather than guessed.
+
+Screenshots at the four requested moments: `screenshots/opening-0-hero.png` (on load), `opening-1-midcoldstart.png`, `opening-2-endcoldstart.png`, `opening-3-drive5pct.png`. Captured by the new `tools/capture-opening.mjs`.
