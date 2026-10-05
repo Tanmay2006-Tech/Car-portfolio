@@ -60,7 +60,9 @@ for (const [name, y] of targets) {
   await page.evaluate((v) => window.scrollTo(0, Math.max(0, v - 300)), y)
   await page.waitForTimeout(500)
   await page.evaluate((v) => window.scrollTo(0, v), y)
-  await page.waitForTimeout(1600)
+  // Long enough for the car's inertia (Car.tsx ROUTE_FOLLOW_LAMBDA) to
+  // finish catching up to the jump.
+  await page.waitForTimeout(3200)
   await page.screenshot({ path: `${prefix}${name}.png` })
   console.log(`saved ${prefix}${name}.png (scrollY=${Math.round(y)})`)
 }

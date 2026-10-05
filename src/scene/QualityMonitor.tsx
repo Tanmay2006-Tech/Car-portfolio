@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 
 import { scroll } from './scrollState'
+import { carPose } from './carPose'
 import { FINAL_HOLD_P } from './cameraShots'
 import { useQuality } from './quality'
 
@@ -27,7 +28,7 @@ import { useQuality } from './quality'
 // CLAUDE.md section 5's "never setState during scroll" rules out.
 export function QualityMonitor() {
   useFrame(() => {
-    const stationary = scroll.phase === 'hero' || (scroll.phase === 'route' && scroll.routeP >= FINAL_HOLD_P)
+    const stationary = scroll.phase === 'hero' || (scroll.phase === 'route' && carPose.routeP >= FINAL_HOLD_P)
     if (stationary !== useQuality.getState().isStationary) {
       useQuality.getState().setStationary(stationary)
     }

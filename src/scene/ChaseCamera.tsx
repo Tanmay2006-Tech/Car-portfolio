@@ -18,12 +18,12 @@ const UP = new THREE.Vector3(0, 1, 0)
 // (Car.tsx), so the camera's orientation frame damps slower than that. In a
 // corner the car turns first and the camera swings round after it.
 const CAMERA_YAW_LAMBDA = 2
-// Position damping is separate and deliberately light. Damped position lags in
-// proportion to speed (speed / lambda metres behind), so a lambda below the
-// car's would stretch the camera several metres further back at cruise than
-// at rest. The cornering lag comes from the yaw above; this only softens
-// scroll jitter and the blends between shots.
-const CAMERA_POSITION_LAMBDA = 8
+// Offset damping. The camera is carried rigidly by the car and only its
+// OFFSET from the car (and the aim's offset) is damped — damping the world
+// position instead lags in proportion to speed, and a fast scroll through
+// leg 1's side-on shot used to leave the car running out of frame. This
+// only softens the blends between shots; the cornering lag is the yaw above.
+const CAMERA_OFFSET_LAMBDA = 6
 const MOBILE_RADIUS_SCALE = 1.25
 
 function shortestAngleDiff(a: number, b: number) {
@@ -39,6 +39,8 @@ export function ChaseCamera() {
     azimuthDeg: 0, radius: 0, height: 0, aimX: 0, aimY: 0, aimZ: 0, fov: 35, stageBias: 0,
   })
   const camYaw = useRef<number | null>(null)
+  const camOffset = useRef(new THREE.Vector3())
+  const aimOffset = useRef(new THREE.Vector3())
   const camPos = useRef(new THREE.Vector3())
   const aimPos = useRef(new THREE.Vector3())
   const scratchIdeal = useRef(new THREE.Vector3())
@@ -69,10 +71,10 @@ export function ChaseCamera() {
     // rather than three differently-paced ones stitched together.
     let s: Shot
     if (scroll.phase === 'route') {
-      // Scroll's own route progress, not carPose.progress: in leg 5 the car
-      // brakes to a stop (scrollState.ts driveP) while the camera keeps
+      // The car's eased route progress (before leg 5's braking remap), not
+      // carPose.progress: in leg 5 the car stops while the camera keeps
       // moving through the door and cabin beats on the linear budget.
-      s = sampleShot(scroll.routeP, shot.current)
+      s = sampleShot(carPose.routeP, shot.current)
     } else {
       // 'hero': t=0, pure HERO, held for the whole HERO_PX budget.
       // 'coldstart': eases 0->1 across COLD_START_PX, arriving at exactly
@@ -95,23 +97,25 @@ export function ChaseCamera() {
     const ideal = scratchIdeal.current
       .set(s.aimX - radius * Math.cos(az), s.height, s.aimZ + radius * Math.sin(az))
       .applyAxisAngle(UP, camYaw.current)
-      .add(carPose.position)
     // What it looks at: a point on the car, in the car's TRUE frame, so the
     // lag reads as the camera swinging to catch up, not the car drifting.
     const aim = scratchAim.current
       .set(s.aimX, s.aimY, s.aimZ)
       .applyAxisAngle(UP, carPose.heading)
-      .add(carPose.position)
 
+    // ideal/aim are offsets from the car here; damp those, then carry them
+    // on the car's exact position so the car can never leave the frame.
     if (!seeded.current) {
-      camPos.current.copy(ideal)
-      aimPos.current.copy(aim)
+      camOffset.current.copy(ideal)
+      aimOffset.current.copy(aim)
       seeded.current = true
     } else {
-      const k = 1 - Math.exp(-CAMERA_POSITION_LAMBDA * dt)
-      camPos.current.lerp(ideal, k)
-      aimPos.current.lerp(aim, k)
+      const k = 1 - Math.exp(-CAMERA_OFFSET_LAMBDA * dt)
+      camOffset.current.lerp(ideal, k)
+      aimOffset.current.lerp(aim, k)
     }
+    camPos.current.copy(carPose.position).add(camOffset.current)
+    aimPos.current.copy(carPose.position).add(aimOffset.current)
 
     // Stage bias: shift the aim point left of the car, along the camera's own
     // right vector, so the car lands right of frame. Sized from the actual

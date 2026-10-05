@@ -2,18 +2,18 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
-import { srgb, DAWN_LOW } from './colors'
 import { carPose } from './carPose'
+import { dawn } from './DawnCycle'
 
 // Low sun (CLAUDE.md section 2's "dawn, not candy" — low sun, long raking
 // shadows). Elevation is measured from the horizon; distance only affects
 // where the shadow camera sits, not the light direction, since this is a
 // directional light.
-const SUN_ELEVATION_DEG = 15
-const SUN_AZIMUTH_DEG = 110
+// Elevation is no longer fixed: DawnCycle raises the sun from ~6 deg at the
+// hero to ~24 deg by the cabin, and the shadows shorten with it.
+export const SUN_AZIMUTH_DEG = 110
 const SUN_DISTANCE = 8
 
-const elevationRad = THREE.MathUtils.degToRad(SUN_ELEVATION_DEG)
 const azimuthRad = THREE.MathUtils.degToRad(SUN_AZIMUTH_DEG)
 // Offset from the car, not a world position — the whole point of this rig
 // is that this offset stays constant while both the light and its target
@@ -21,13 +21,7 @@ const azimuthRad = THREE.MathUtils.degToRad(SUN_AZIMUTH_DEG)
 // shadow-camera frustum travel with the car instead of being pinned to the
 // origin (PROMPTS.md: "the shadow camera was framed to the car's footprint
 // back when the car was static — now it travels 952m").
-const SUN_OFFSET = new THREE.Vector3(
-  Math.cos(azimuthRad) * Math.cos(elevationRad) * SUN_DISTANCE,
-  Math.sin(elevationRad) * SUN_DISTANCE,
-  Math.sin(azimuthRad) * Math.cos(elevationRad) * SUN_DISTANCE,
-)
-
-export const sunColor = srgb(DAWN_LOW)
+const SUN_OFFSET = new THREE.Vector3()
 
 // Renders the key light plus its shadow target, and re-centres both on the
 // car every frame. Must mount AFTER <Car/> (same rule as ChaseCamera) so it
@@ -57,9 +51,17 @@ export function SunRig() {
   useFrame(() => {
     const light = lightRef.current
     if (!light) return
+    const elevationRad = THREE.MathUtils.degToRad(dawn.sunElevationDeg)
+    SUN_OFFSET.set(
+      Math.cos(azimuthRad) * Math.cos(elevationRad) * SUN_DISTANCE,
+      Math.sin(elevationRad) * SUN_DISTANCE,
+      Math.sin(azimuthRad) * Math.cos(elevationRad) * SUN_DISTANCE,
+    )
     target.position.copy(carPose.position)
     target.updateMatrixWorld()
     light.position.copy(carPose.position).add(SUN_OFFSET)
+    light.color.copy(dawn.sunColor)
+    light.intensity = dawn.sunIntensity
   })
 
   return (
@@ -86,8 +88,8 @@ export function SunRig() {
           around a car that no longer sits at the origin. */}
       <directionalLight
         ref={setupSunShadow}
-        color={sunColor}
-        intensity={3.5}
+        color={dawn.sunColor}
+        intensity={dawn.sunIntensity}
         castShadow
         shadow-mapSize={[1024, 1024]}
         shadow-camera-left={-5}

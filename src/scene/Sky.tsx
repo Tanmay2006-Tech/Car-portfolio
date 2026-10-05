@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
-import { DAWN_HIGH, DAWN_LOW, srgb } from './colors'
+import { dawn } from './DawnCycle'
+import { SUN_AZIMUTH_DEG } from './SunRig'
 
 // scene.background only accepts a flat colour or a texture, not a
 // procedural gradient, so the dawn-high -> dawn-low sky is a large
@@ -33,26 +35,44 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   uniform vec3 topColor;
   uniform vec3 bottomColor;
+  uniform vec3 sunColor;
+  uniform vec3 sunDir;
   uniform float offset;
   uniform float exponent;
   varying vec3 vWorldPosition;
   void main() {
-    float h = normalize(vWorldPosition + vec3(0.0, offset, 0.0)).y;
-    gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+    vec3 dir = normalize(vWorldPosition + vec3(0.0, offset, 0.0));
+    float h = dir.y;
+    vec3 sky = mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0));
+    // Low sun: a soft disc and a wide warm glow along the horizon on its
+    // side of the sky. Pale, not bright — the sky stays pastel.
+    float d = max(dot(normalize(vWorldPosition), sunDir), 0.0);
+    sky = mix(sky, sunColor, pow(d, 6.0) * 0.45);
+    sky = mix(sky, vec3(1.0, 0.97, 0.92), smoothstep(0.9993, 0.9997, d) * 0.85);
+    gl_FragColor = vec4(sky, 1.0);
     #include <colorspace_fragment>
   }
 `
 
 export function Sky() {
+  // The colour uniforms ARE DawnCycle's colour objects, mutated in place,
+  // so the sky follows the sunrise with no per-frame copying.
   const uniforms = useMemo(
     () => ({
-      topColor: { value: srgb(DAWN_HIGH) },
-      bottomColor: { value: srgb(DAWN_LOW) },
+      topColor: { value: dawn.top },
+      bottomColor: { value: dawn.horizon },
+      sunColor: { value: dawn.sunColor },
+      sunDir: { value: new THREE.Vector3() },
       offset: { value: 20 },
       exponent: { value: 0.6 },
     }),
     [],
   )
+  useFrame(() => {
+    const el = THREE.MathUtils.degToRad(dawn.sunElevationDeg)
+    const az = THREE.MathUtils.degToRad(SUN_AZIMUTH_DEG)
+    uniforms.sunDir.value.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el))
+  })
 
   return (
     <mesh scale={500}>

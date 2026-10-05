@@ -23,6 +23,8 @@ export interface Project {
   points: string[]
   github: string
   live?: string
+  // One number that proves it, shown large on the card and the roadside sign.
+  figure?: { value: string; label: string }
 }
 
 // Leg 1: five, in the order the car passes them (CLAUDE.md section 8).
@@ -36,6 +38,7 @@ export const ROAD_PROJECTS: Project[] = [
       'Server-authoritative sessions, an away mode, and automated seat recovery.',
       'Librarian command centre and occupancy analytics, OpenAPI-first.',
     ],
+    figure: { value: '90+', label: 'seats tracked live' },
     github: 'https://github.com/Tanmay2006-Tech/NooK',
     live: 'https://noo-k-nook.vercel.app',
   },
@@ -48,6 +51,7 @@ export const ROAD_PROJECTS: Project[] = [
       'Domain-restricted signup with invite-code roles for students, club officers and faculty.',
       'Row-level security on every table; private media served through signed URLs.',
     ],
+    figure: { value: '3', label: 'invite-code roles' },
     github: 'https://github.com/Tanmay2006-Tech/digital-campus-square',
     live: 'https://digital-campus-square.vercel.app',
   },
@@ -60,6 +64,7 @@ export const ROAD_PROJECTS: Project[] = [
       'POST /ask pulls the top-k chunks and answers with a Groq model.',
       'Falls back to TF-IDF when sentence-transformers can’t download.',
     ],
+    figure: { value: '5', label: 'pipeline stages' },
     github: 'https://github.com/Tanmay2006-Tech/Groq-Docs-RAG',
   },
   {
@@ -83,6 +88,7 @@ export const ROAD_PROJECTS: Project[] = [
       'Four personas and four switchable Groq models.',
       'Landing page built around a 3D neural orb in Three.js.',
     ],
+    figure: { value: '<200ms', label: 'streaming responses' },
     github: 'https://github.com/Tanmay2006-Tech/Zeno',
     live: 'https://zeno-five-topaz.vercel.app',
   },

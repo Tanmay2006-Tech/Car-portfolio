@@ -11,4 +11,13 @@ export const carPose = {
   // Car.tsx uses: local +X maps to world (cos a, 0, -sin a).
   heading: 0,
   progress: 0,
+  // Route progress (0-1 of the scroll's route budget) after Car.tsx's
+  // inertia — what everything that should move WITH the car reads: the
+  // camera's shot keyframes, the leg 1 card track, the door. Raw
+  // scroll.routeP jumps with every wheel notch; this glides.
+  routeP: 0,
+  // Set by DOM code that jumps the page on purpose (keyboard focus landing
+  // on a project card): the car skips its inertia and appears at the new
+  // position, so the focused card is on screen immediately.
+  snap: false,
 }

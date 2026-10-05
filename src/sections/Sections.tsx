@@ -92,7 +92,17 @@ function ProjectCard({ project }: { project: Project }) {
     <article className="card">
       <h3 className="card__name">{project.name}</h3>
       <p className="card__kind">{project.kind}</p>
-      <p className="card__stack">{project.stack.join(', ')}</p>
+      {project.figure && (
+        <p className="card__figure">
+          <span className="card__figure-value">{project.figure.value}</span>
+          <span className="card__figure-label">{project.figure.label}</span>
+        </p>
+      )}
+      <ul className="tags" aria-label="Stack">
+        {project.stack.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ul>
       <ul className="card__points">
         {project.points.map((point) => (
           <li key={point}>{point}</li>
@@ -129,6 +139,7 @@ function trackOffset(distanceM: number): number {
 function Projects({ layout }: { layout: Layout }) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
+  const ticksRef = useRef<HTMLOListElement>(null)
   const pinned = layout === 'drive' && !IS_MOBILE
 
   useRaf(() => {
@@ -137,6 +148,8 @@ function Projects({ layout }: { layout: Layout }) {
     if (!viewport || !track) return
     const offset = trackOffset(carPose.progress * ROUTE_LENGTH_M)
     track.style.transform = `translate3d(${-offset * viewport.clientWidth}px, 0, 0)`
+    const current = Math.round(offset)
+    ticksRef.current?.querySelectorAll('li').forEach((li, i) => li.toggleAttribute('data-active', i === current))
   }, pinned)
 
   // CLAUDE.md section 5's fourth gotcha: Tab can land on a card that is
@@ -154,6 +167,7 @@ function Projects({ layout }: { layout: Layout }) {
       if (index < 0) return
       viewport.scrollLeft = 0
       scrollToPx(routeToScrollPx(projectMarkerDistance(index) / ROUTE_LENGTH_M))
+      carPose.snap = true
     }
     track.addEventListener('focusin', onFocus)
     return () => track.removeEventListener('focusin', onFocus)
@@ -163,6 +177,13 @@ function Projects({ layout }: { layout: Layout }) {
     <Leg id="projects" label="Projects" from={LEG_START[1]} to={LEG_START[2]} layout={layout} className="leg--projects">
       <h2>Projects</h2>
       <p className="lede">Five systems, passed in order on the straight.</p>
+      {pinned && (
+        <ol ref={ticksRef} className="ticks" aria-hidden="true">
+          {ROAD_PROJECTS.map((p) => (
+            <li key={p.name}>{p.name}</li>
+          ))}
+        </ol>
+      )}
       <div ref={viewportRef} className={`track-viewport ${pinned ? 'track-viewport--pinned' : 'track-viewport--swipe'}`}>
         <div ref={trackRef} className="track">
           {ROAD_PROJECTS.map((project) => (
@@ -264,6 +285,10 @@ function RoadRisk({ layout }: { layout: Layout }) {
     <Leg id="road-risk" label="Road risk" from={LEG_START[4]} to={LEG_START[5]} layout={layout} className="leg--risk">
       <h2>Road risk</h2>
       <p className="lede">Two systems on the same problem: one reads the network, one reads the route.</p>
+      <p className="legend">
+        <span className="legend__ramp" aria-hidden="true" />
+        <span>The road under the car becomes a severity map, the kind of layer both systems produce. Low to high.</span>
+      </p>
       <article className="risk">
         <h3>{GRIDSENSE.name}</h3>
         <p className="card__kind">{GRIDSENSE.kind}</p>

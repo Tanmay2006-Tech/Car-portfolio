@@ -39,6 +39,16 @@ await page.addInitScript(() => {
   }).observe({ type: 'largest-contentful-paint', buffered: true })
 })
 
+// --css="..." injects a stylesheet before load, for A/B-ing a style's cost.
+const CSS = (args.find((a) => a.startsWith('--css=')) ?? '').slice(6)
+if (CSS) await page.addInitScript((css) => {
+  document.addEventListener('DOMContentLoaded', () => {
+    const s = document.createElement('style')
+    s.textContent = css
+    document.head.appendChild(s)
+  })
+}, CSS)
+
 const t0 = Date.now()
 await page.goto(URL, { waitUntil: 'load' })
 await page.waitForFunction(() => window.__appReady === true, { timeout: 90000 })

@@ -13,6 +13,7 @@ import { QualityMonitor } from './scene/QualityMonitor'
 import { useQuality } from './scene/quality'
 import { srgb, DAWN_LOW } from './scene/colors'
 import { Sky } from './scene/Sky'
+import { DawnCycle } from './scene/DawnCycle'
 import { Ground } from './scene/Ground'
 import { RoadRibbon } from './scene/RoadRibbon'
 import { LaneMarkings } from './scene/LaneMarkings'
@@ -150,6 +151,7 @@ function Scene({ onContextLost }: { onContextLost: () => void }) {
           }}
         >
           <Sky />
+          <DawnCycle />
           <fog attach="fog" args={[fogColor, FOG_NEAR, FOG_FAR]} />
 
           {/* Writes useQuality's isStationary from scroll.progress every

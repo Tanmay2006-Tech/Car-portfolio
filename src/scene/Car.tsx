@@ -31,6 +31,12 @@ const DOOR_OPEN_POS = new THREE.Vector3(-106.3989, 0, 90.7349)
 // the gauge's needle to move with the car instead of sitting at idle.
 const RPM_PER_KMH = 40
 const MAX_RPM = 7200
+// Inertia between scroll and car (see the useFrame). The car glides toward
+// the scroll position with this time constant (~0.3s) and never faster than
+// ROUTE_MAX_SPEED_MPS, so a flicked wheel or a dragged scrollbar reads as a
+// hard launch and a quick run, not a teleport.
+const ROUTE_FOLLOW_LAMBDA = 3.2
+const ROUTE_MAX_SPEED_MPS = 120
 const CABIN_LIGHT_INTENSITY = 2.2
 
 const UP = new THREE.Vector3(0, 1, 0)
@@ -151,6 +157,7 @@ export function Car() {
   const wheelsRef = useRef<Partial<Record<WheelKey, THREE.Object3D>>>({})
   const doorRef = useRef<THREE.Object3D | null>(null)
   const rpmSmoothed = useRef(0)
+  const routeSmooth = useRef<number | null>(null)
   const totalLength = useMemo(() => ROUTE_CURVE.getLength(), [])
 
   // Driving state carried between frames — refs, not React state, per
@@ -306,9 +313,27 @@ export function Car() {
     // routeP is already 0 for the first two and real curve progress only
     // once scroll passes into the route budget — the car stays parked at
     // the route's start through both hero and cold start.
+    //
+    // Inertia: ease the car's route progress toward the scroll's, capped at
+    // a top speed. Seeded from scroll on the first frame so a reload
+    // mid-page doesn't drive the whole route from the start.
+    if (routeSmooth.current === null || carPose.snap) {
+      routeSmooth.current = scroll.routeP
+      // Re-seed distance tracking too, or the jump reads as one frame at
+      // hundreds of km/h (wheel spin, pitch, the gauge).
+      if (carPose.snap) prevPos.current = null
+      carPose.snap = false
+    }
+    const follow = routeSmooth.current + (scroll.routeP - routeSmooth.current) * (1 - Math.exp(-ROUTE_FOLLOW_LAMBDA * dt))
+    const maxStep = (ROUTE_MAX_SPEED_MPS * dt) / totalLength
+    routeSmooth.current = THREE.MathUtils.clamp(follow, routeSmooth.current - maxStep, routeSmooth.current + maxStep)
+    if (Math.abs(scroll.routeP - routeSmooth.current) < 1e-6) routeSmooth.current = scroll.routeP
+    const routeP = routeSmooth.current
+    carPose.routeP = routeP
+
     // driveP: identical to routeP until leg 5, where the car brakes to a
     // stop while scroll carries on through the door and cabin beats.
-    const p = THREE.MathUtils.clamp(driveP(scroll.routeP), 0.0001, 0.9999)
+    const p = THREE.MathUtils.clamp(driveP(routeP), 0.0001, 0.9999)
     const pos = ROUTE_CURVE.getPointAt(p, scratchPos.current)
 
     if (prevPos.current === null) {
@@ -443,7 +468,7 @@ export function Car() {
     // inside, so there's nothing to open the door onto.
     const door = doorRef.current
     if (door && !IS_MOBILE) {
-      const open = THREE.MathUtils.smootherstep(scroll.routeP, DOOR_OPEN_START, DOOR_OPEN_END)
+      const open = THREE.MathUtils.smootherstep(routeP, DOOR_OPEN_START, DOOR_OPEN_END)
       door.quaternion.slerpQuaternions(DOOR_CLOSED_QUAT, DOOR_OPEN_QUAT, open)
       door.position.lerpVectors(DOOR_CLOSED_POS, DOOR_OPEN_POS, open)
     }
@@ -454,7 +479,7 @@ export function Car() {
     // only as the door opens.
     const cabinLight = cabinLightRef.current
     if (cabinLight) {
-      cabinLight.intensity = IS_MOBILE ? 0 : CABIN_LIGHT_INTENSITY * THREE.MathUtils.smootherstep(scroll.routeP, DOOR_OPEN_START, DOOR_OPEN_END)
+      cabinLight.intensity = IS_MOBILE ? 0 : CABIN_LIGHT_INTENSITY * THREE.MathUtils.smootherstep(routeP, DOOR_OPEN_START, DOOR_OPEN_END)
     }
 
     prevPos.current.copy(pos)
