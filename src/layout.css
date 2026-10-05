@@ -1,0 +1,684 @@
+/* Layout and components. Tokens live in index.css (CLAUDE.md section 2). */
+
+/* Type scale — 1.25. Body 17px / 1.55. */
+:root {
+  --step--1: 13.6px;
+  --step-0: 17px;
+  --step-1: 21.25px;
+  --step-2: 26.56px;
+  --step-3: 33.2px;
+  --step-4: 41.5px;
+  --gutter: 48px;
+  --column: min(36vw, 520px);
+}
+
+a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+}
+a:hover {
+  border-bottom-width: 2px;
+}
+
+p {
+  margin: 0;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0;
+  font-size: 15px;
+}
+
+/* Stage: the fixed canvas wrapper, or the still image without WebGL. */
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+.stage--image {
+  background-color: var(--dawn-low);
+  background-position: center right;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+/* Hero */
+.hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  width: var(--column);
+  padding: 0 var(--gutter);
+  color: var(--ink);
+}
+.hero--fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  z-index: 5;
+}
+.hero--flow {
+  position: relative;
+  min-height: 100vh;
+  z-index: 2;
+}
+.hero__role {
+  font-size: 15px;
+}
+.hero__name {
+  font-size: clamp(2.3rem, 4.6vw, 3.6rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+}
+.hero__summary {
+  max-width: 34ch;
+}
+.hero__proof {
+  font-size: 15px;
+}
+.hero__links {
+  margin-top: 8px;
+}
+.hero__hint {
+  margin-top: 28px;
+  font-size: var(--step--1);
+}
+
+/* Legs: absolutely placed over #page in the driving layout, each with a
+   sticky full-height column; stacked normally in the static layout. */
+#page {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+.leg {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+.leg__sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+}
+.leg__column {
+  width: var(--column);
+  padding: 0 var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  pointer-events: auto;
+  max-height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.leg__column::-webkit-scrollbar {
+  display: none;
+}
+.leg h2 {
+  font-size: var(--step-3);
+  font-weight: 600;
+  line-height: 1.1;
+}
+.leg h3 {
+  font-size: var(--step-1);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.lede {
+  font-size: 15px;
+  margin-top: -6px;
+}
+
+.leg--static {
+  position: relative;
+  padding: 14vh 0;
+}
+.leg--static .leg__column {
+  max-height: none;
+  overflow: visible;
+  gap: 16px;
+  padding-top: 28px;
+  padding-bottom: 28px;
+}
+
+/* Projects, leg 1 */
+.track-viewport {
+  margin-top: 10px;
+}
+.track-viewport--pinned {
+  overflow: hidden;
+}
+.track {
+  display: flex;
+}
+.track-viewport--pinned .track {
+  will-change: transform;
+}
+.card {
+  flex: 0 0 100%;
+  padding-right: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.leg .card__name {
+  font-size: var(--step-2);
+}
+.card__kind {
+  font-size: 15px;
+  margin-top: -6px;
+}
+.card__stack {
+  font-size: var(--step--1);
+}
+.card__points {
+  margin: 0;
+  padding-left: 1.1em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.leg--static .track {
+  flex-direction: column;
+  gap: 48px;
+}
+
+/* Telemetry, leg 2 */
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 24px;
+  margin: 8px 0 6px;
+}
+.stat {
+  display: flex;
+  flex-direction: column-reverse;
+  border-top: 1px solid var(--ink);
+  padding-top: 8px;
+}
+.stat dt {
+  font-size: var(--step--1);
+}
+.stat dd {
+  margin: 0;
+  font-size: var(--step-4);
+  font-weight: 500;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+}
+.spec {
+  border-collapse: collapse;
+  font-size: 14px;
+  width: 100%;
+}
+.spec caption {
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  padding-bottom: 6px;
+}
+.spec th,
+.spec td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 0;
+  border-top: 1px solid rgba(43, 39, 51, 0.35);
+}
+.spec th {
+  font-weight: 500;
+  width: 38%;
+  padding-right: 12px;
+}
+
+/* Service log, leg 3: the only numbered list on the site */
+.log {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.log li {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 2px solid transparent;
+  transition: border-color 0.3s;
+}
+.log li[data-active] {
+  border-left-color: var(--ink);
+}
+.log__num {
+  font-size: var(--step-2);
+  font-weight: 500;
+  line-height: 1;
+}
+.log__dates {
+  font-size: var(--step--1);
+}
+.leg .log h3 {
+  font-size: 18px;
+  margin: 2px 0 4px;
+}
+.log li p:last-child {
+  font-size: 15px;
+}
+
+/* Road risk, leg 4 */
+.risk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15.5px;
+}
+.risk + .risk {
+  margin-top: 6px;
+}
+.paper {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+}
+.paper__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--step-1);
+  line-height: 1.2;
+}
+.paper__doi {
+  margin: 4px 0 6px;
+}
+
+/* About, leg 5 */
+.edu {
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+}
+.edu div {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+}
+.edu dd {
+  margin: 0;
+}
+
+/* Contact, leg 5 inside the cabin. The column drops away; the form sits
+   in its own panel so it stays legible over the dark interior. */
+.leg--contact .leg__sticky {
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 40px 32px var(--gutter);
+}
+.contact {
+  pointer-events: auto;
+  width: min(460px, calc(100vw - 2 * var(--gutter)));
+  background: rgba(247, 220, 194, 0.95);
+  padding: 22px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.contact h2 {
+  font-size: var(--step-2);
+  font-weight: 600;
+}
+.form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+.form__wide {
+  grid-column: 1 / -1;
+}
+.form input,
+.form textarea {
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: #fffaf4;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 8px 10px;
+}
+.form textarea {
+  resize: vertical;
+}
+.form__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.form__status {
+  font-size: 14px;
+}
+/* The one --guards CTA on the site (CLAUDE.md section 2). */
+.cta {
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--guards);
+  border: 0;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+.cta:focus-visible {
+  outline-offset: 3px;
+}
+.leg--contact-static .contact {
+  background: transparent;
+  padding: 0;
+  width: auto;
+}
+
+/* Gauge: the live telemetry instrument */
+.gauge {
+  position: fixed;
+  right: 28px;
+  bottom: 22px;
+  z-index: 4;
+  width: 132px;
+  color: var(--ink);
+  pointer-events: none;
+  text-align: center;
+}
+.gauge svg {
+  display: block;
+}
+.gauge__arc {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.gauge__redline {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3.2;
+}
+.gauge__tick {
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.gauge__needle {
+  stroke: var(--ink);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.gauge__hub {
+  fill: var(--ink);
+}
+.gauge__readout {
+  margin-top: -34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+.gauge__speed {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.gauge__unit,
+.gauge__rpm {
+  font-size: 12px;
+}
+.gauge__rpm {
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small model-load readout, not a splash screen */
+.loader {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 5;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* Footer */
+.footer {
+  position: relative;
+  z-index: 3;
+  background: var(--dawn-low);
+  border-top: 1px solid var(--ink);
+}
+.footer__inner {
+  max-width: 1100px;
+  padding: 64px var(--gutter) 48px;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 48px;
+}
+.footer h2 {
+  font-size: var(--step-2);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.also {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.also li {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+}
+.also a {
+  justify-self: start;
+  align-self: start;
+}
+.credits {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+  align-self: end;
+}
+
+/* Static layout (reduced motion / no WebGL): content sits on a solid
+   column so it reads cleanly over the parked car. */
+.static-page {
+  position: relative;
+  z-index: 2;
+}
+.static-page .leg__column,
+.static-page .hero {
+  background: rgba(247, 220, 194, 0.92);
+}
+
+/* Mobile: car in the top 45vh, content below (CLAUDE.md section 2) */
+@media (max-width: 768px) {
+  :root {
+    --gutter: 20px;
+    --column: 100%;
+  }
+  body {
+    font-size: 16px;
+  }
+  .stage {
+    bottom: auto;
+    height: 45vh;
+  }
+  .hero--fixed {
+    top: 45vh;
+    height: 55vh;
+    justify-content: flex-start;
+    padding-top: 20px;
+    gap: 10px;
+    background: var(--dawn-low);
+  }
+  .hero__name {
+    font-size: 2.2rem;
+  }
+  .hero__hint {
+    margin-top: 6px;
+  }
+  .leg__sticky {
+    top: 45vh;
+    height: 55vh;
+    align-items: stretch;
+    background: var(--dawn-low);
+  }
+  .leg__column {
+    max-height: 55vh;
+    padding-top: 18px;
+    padding-bottom: 24px;
+  }
+  .leg h2 {
+    font-size: var(--step-2);
+  }
+  .stat dd {
+    font-size: var(--step-3);
+  }
+  .track-viewport--swipe {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin-right: calc(-1 * var(--gutter));
+    flex-shrink: 0;
+  }
+  .track-viewport--swipe .card {
+    flex: 0 0 86%;
+    scroll-snap-align: start;
+  }
+  .leg--contact .leg__sticky {
+    padding: 0;
+  }
+  .contact {
+    width: 100%;
+    max-height: 55vh;
+    overflow-y: auto;
+    padding: 16px 20px 24px;
+  }
+  .form {
+    grid-template-columns: 1fr;
+  }
+  .gauge {
+    top: calc(45vh - 92px);
+    bottom: auto;
+    right: 8px;
+    transform: scale(0.68);
+    transform-origin: top right;
+  }
+  .footer__inner {
+    grid-template-columns: 1fr;
+    padding-top: 40px;
+  }
+  .also li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .static-page .stage {
+    position: relative;
+  }
+  .static-page .hero--flow {
+    min-height: auto;
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+  .leg--static {
+    padding: 0;
+  }
+}
+
+/* Column pane, desktop only (ColumnPane.tsx) */
+.column-pane {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--column);
+  z-index: 1;
+  background: rgba(247, 220, 194, 0.8);
+  border-right: 1px solid rgba(43, 39, 51, 0.18);
+  pointer-events: none;
+}
+@media (max-width: 768px) {
+  .column-pane {
+    display: none;
+  }
+}
+
+/* Short desktop screens (1280x720 laptops): the sticky column can't
+   scroll on its own — Lenis owns the wheel — so it has to fit. */
+@media (max-height: 820px) and (min-width: 769px) {
+  .leg__column {
+    gap: 10px;
+  }
+  .leg h2 {
+    font-size: var(--step-2);
+  }
+  .lede {
+    margin-top: -4px;
+  }
+  .leg .card__name {
+    font-size: var(--step-1);
+  }
+  .card__points {
+    gap: 3px;
+  }
+  .risk {
+    font-size: 14.5px;
+    gap: 5px;
+    line-height: 1.45;
+  }
+  .leg .risk h3 {
+    font-size: 19px;
+  }
+  .paper {
+    margin-top: 4px;
+    padding-top: 8px;
+    gap: 2px;
+    font-size: 14px;
+  }
+  .paper__title {
+    font-size: 18px;
+  }
+  .paper__doi {
+    margin: 2px 0 4px;
+  }
+  .stat dd {
+    font-size: var(--step-3);
+  }
+  .stats {
+    gap: 12px 24px;
+  }
+  .log {
+    gap: 12px;
+  }
+}

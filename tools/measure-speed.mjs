@@ -14,7 +14,8 @@
 // Usage: node tools/measure-speed.mjs [url]
 import { chromium } from 'playwright';
 
-const URL = process.argv[2] ?? 'http://localhost:5174';
+// ?debug: the HUD this reads is only mounted in debug mode now.
+const URL = process.argv[2] ?? 'http://localhost:5174/?debug';
 
 function readHud(page) {
   return page.evaluate(() => document.body.innerText.split('\n').slice(0, 8).join(' | '));

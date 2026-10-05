@@ -55,3 +55,35 @@ export const PAGE_HEIGHT_PX = HERO_PX + COLD_START_PX + ROUTE_PX
 export function windowProgress(scrollPxNow: number, startPx: number, lengthPx: number): number {
   return Math.min(1, Math.max(0, (scrollPxNow - startPx) / lengthPx))
 }
+
+// Absolute scroll position (px) at which route progress `routeP` is
+// reached. #page is PAGE_HEIGHT_PX + one viewport tall (App.tsx), so its
+// ScrollTrigger range is exactly PAGE_HEIGHT_PX and scroll px map 1:1 onto
+// these budgets — which is what lets the DOM leg sections be positioned
+// with plain pixel offsets and still line up with the car.
+export function routeToScrollPx(routeP: number): number {
+  return HERO_PX + COLD_START_PX + routeP * ROUTE_PX
+}
+
+// Leg 5 (CLAUDE.md section 1: "Decelerates, stops"). Scroll keeps running
+// linearly through leg 5 — the camera, door and cabin beats need that
+// budget — but the car's own position is remapped so it brakes to a halt
+// over the first STOP_T of the leg and then stays put. Constant
+// deceleration from the cruise slope: the remap's derivative is 1 at the
+// leg boundary (no speed jump) and falls linearly to 0 at STOP_T, so the
+// car covers STOP_T/2 of leg 5's road and the brake lights fire on their
+// own from the real deceleration (Car.tsx's accel signal).
+export const LEG5_START = 0.9
+export const STOP_T = 0.45
+export function driveP(routeP: number): number {
+  if (routeP <= LEG5_START) return routeP
+  const t = Math.min(1, (routeP - LEG5_START) / (1 - LEG5_START))
+  const f = t < STOP_T ? t - (t * t) / (2 * STOP_T) : STOP_T / 2
+  return LEG5_START + (1 - LEG5_START) * f
+}
+
+// Leg 5 beats, as route progress (scroll), after the car has stopped at
+// LEG5_START + (1 - LEG5_START) * STOP_T = 0.945.
+export const DOOR_OPEN_START = 0.948
+export const DOOR_OPEN_END = 0.966
+export const CABIN_REACHED = 0.985

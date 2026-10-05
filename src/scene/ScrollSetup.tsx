@@ -3,9 +3,22 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
 
-import { scroll, HERO_PX, COLD_START_PX, ROUTE_PX, PAGE_HEIGHT_PX, windowProgress } from './scrollState'
+import { scroll, HERO_PX, COLD_START_PX, ROUTE_PX, PAGE_HEIGHT_PX, CABIN_REACHED, windowProgress } from './scrollState'
+import { LEG_START } from './legs'
+import { useSection } from './sectionStore'
 
 gsap.registerPlugin(ScrollTrigger)
+
+// For DOM code that needs to move the page (keyboard focus landing on a
+// project card that's still off to the side — CLAUDE.md section 5's fourth
+// gotcha). Going through Lenis rather than window.scrollTo keeps its
+// smoothed position from fighting the jump.
+export const lenisRef: { current: Lenis | null } = { current: null }
+
+export function scrollToPx(y: number) {
+  if (lenisRef.current) lenisRef.current.scrollTo(y, { immediate: true, force: true })
+  else window.scrollTo(0, y)
+}
 
 // CLAUDE.md section 5: "Lenis and ScrollTrigger must be explicitly wired
 // together... Skip this and pinning desyncs from smooth scroll in ways
@@ -22,6 +35,7 @@ export function ScrollSetup() {
   useEffect(() => {
     const lenis = new Lenis({ autoRaf: false })
     lenis.on('scroll', ScrollTrigger.update)
+    lenisRef.current = lenis
 
     const driveLenis = (time: number) => lenis.raf(time * 1000)
     gsap.ticker.add(driveLenis)
@@ -56,6 +70,15 @@ export function ScrollSetup() {
           scroll.phaseProgress = 1
           scroll.routeP = windowProgress(scrollPxNow, HERO_PX + COLD_START_PX, ROUTE_PX)
         }
+
+        let section = scroll.phase === 'hero' ? -2 : scroll.phase === 'coldstart' ? -1 : 0
+        if (scroll.phase === 'route') {
+          for (let i = 0; i < LEG_START.length; i++) if (scroll.routeP >= LEG_START[i]) section = i
+          if (scroll.routeP >= CABIN_REACHED - 0.012) section = 6
+        }
+        scroll.section = section
+        // No-op unless it actually changed (sectionStore's own guard).
+        useSection.getState().set(section)
       },
     })
 
@@ -63,6 +86,7 @@ export function ScrollSetup() {
       trigger.kill()
       gsap.ticker.remove(driveLenis)
       lenis.destroy()
+      lenisRef.current = null
     }
   }, [])
 

@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { AdaptiveDpr, Environment, Preload, Stats } from '@react-three/drei'
@@ -23,6 +23,23 @@ import { DebugHud } from './scene/DebugHud'
 import { HeroOverlay } from './scene/HeroOverlay'
 import { ModelLoader } from './scene/ModelLoader'
 import { PAGE_HEIGHT_PX } from './scene/scrollState'
+import { RoadsideMarkers } from './scene/RoadsideMarkers'
+import { Scenery } from './scene/Scenery'
+import { useSection } from './scene/sectionStore'
+import { Sections } from './sections/Sections'
+import { TelemetryGauge } from './sections/TelemetryGauge'
+import { Footer } from './sections/Footer'
+import { ColumnPane } from './sections/ColumnPane'
+import { DRIVING, HAS_WEBGL, DEBUG } from './env'
+
+// Leg 4's heat-map shader (CLAUDE.md section 6: "Lazy-load the GridSense
+// heat-map shader — not needed until leg 4"). Its own chunk, fetched once
+// the car reaches leg 3, and kept mounted after that.
+const RiskLayer = lazy(() => import('./scene/RiskLayer'))
+
+// A still of the parked car at the hero angle, for browsers without WebGL
+// (CLAUDE.md section 7) — and for a context lost mid-session.
+const STATIC_HERO_IMAGE = '/hero-static.jpg'
 
 // Confirmed: THREE.ColorManagement.enabled defaults true (three@0.186.0),
 // and nothing in this codebase sets it false. Asserted here rather than
@@ -66,13 +83,19 @@ const HERO_CAMERA_POSITION: [number, number, number] = [
 ]
 const HERO_CAMERA_LOOKAT: [number, number, number] = [HERO.aimX, HERO.aimY, HERO.aimZ]
 
-export default function App() {
-  // Leg 0/5 only (src/scene/QualityMonitor.tsx) — the car isn't moving, so
-  // this is the one moment to spend extra render quality instead of saving
+function Scene({ onContextLost }: { onContextLost: () => void }) {
+  // True only while the CAMERA is genuinely still — the hero phase (held
+  // on one static shot the whole way) and the very end of the route once
+  // DOOR_PUSH is fully settled (src/scene/QualityMonitor.tsx). Not "the car
+  // isn't moving": cold start parks the car but swings the camera the
+  // entire time, and spending this same extra quality there made a moving
+  // shot look choppy at ~37fps instead of smooth — caught by looking at
+  // the cold-start screenshots, not by reasoning about the car's position.
+  // This is the one moment to spend extra render quality instead of saving
   // frame time: AdaptiveDpr's downgrade disabled (letting the Canvas sit at
   // the device's own native devicePixelRatio, clamped to [1,2] below, same
   // as always) and real MSAA through the EffectComposer, both switched
-  // back on the instant scroll starts driving.
+  // back on the instant the camera starts moving again.
   //
   // dpr itself never changes with isStationary — it stays the same [1,2]
   // clamp range in both states. Forcing it to a literal 2 while stationary
@@ -86,6 +109,9 @@ export default function App() {
   // [1,2] and never scales it up), so simply not mounting AdaptiveDpr while
   // stationary is what "full DPR" actually means per-device.
   const isStationary = useQuality((state) => state.isStationary)
+  const section = useSection((state) => state.section)
+  const [riskWanted, setRiskWanted] = useState(false)
+  if (!riskWanted && section >= 3) setRiskWanted(true)
 
   return (
     <>
@@ -94,7 +120,7 @@ export default function App() {
           <Canvas> caught inside that container gets displaced along with
           it. Living outside the scrolling flow from the start means the
           canvas never has to move when that lands. */}
-      <div style={{ position: 'fixed', inset: 0 }}>
+      <div className="stage">
         <Canvas
           shadows="soft"
           dpr={[1, 2]}
@@ -106,11 +132,17 @@ export default function App() {
               'renderer.outputColorSpace must be SRGBColorSpace or colours display wrong.',
             )
             camera.lookAt(...HERO_CAMERA_LOOKAT)
+            gl.domElement.addEventListener('webglcontextlost', (event) => {
+              event.preventDefault()
+              onContextLost()
+            })
             // Debug-only: lets diagnostic scripts under tools/ read real
             // renderer.info (draw calls, triangles) instead of guessing from
             // source.
             ;(window as unknown as { __gl?: THREE.WebGLRenderer; __scene?: THREE.Scene }).__gl = gl
             ;(window as unknown as { __gl?: THREE.WebGLRenderer; __scene?: THREE.Scene }).__scene = scene
+            ;(window as unknown as { __camera?: THREE.Camera }).__camera = camera
+            if (DEBUG) (window as unknown as { __THREE?: typeof THREE }).__THREE = THREE
           }}
         >
           <Sky />
@@ -147,8 +179,15 @@ export default function App() {
           <Ground />
           <RoadRibbon />
           <LaneMarkings />
-          <DebugCurveLine />
-          <DebugCameraRig />
+          <RoadsideMarkers />
+          <Scenery />
+          {riskWanted && (
+            <Suspense fallback={null}>
+              <RiskLayer />
+            </Suspense>
+          )}
+          {DEBUG && <DebugCurveLine />}
+          {DEBUG && <DebugCameraRig />}
 
           {/* Mounted only while driving: while stationary, this is the ONE
               thing that would otherwise undo the full-quality parked shot
@@ -186,12 +225,52 @@ export default function App() {
             <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
           </EffectComposer>
 
-          <Stats />
+          {DEBUG && <Stats />}
         </Canvas>
       </div>
 
+    </>
+  )
+}
+
+function StaticStill() {
+  return (
+    <div
+      className="stage stage--image"
+      role="img"
+      aria-label="A red Porsche 911 parked on a pale road at dawn"
+      style={{ backgroundImage: `url(${STATIC_HERO_IMAGE})` }}
+    />
+  )
+}
+
+// Reduced motion or no WebGL (CLAUDE.md section 7): no scroll-driven
+// driving at all. The car is rendered once at the hero angle (or shown as
+// a still) and every section appears as an ordinary page.
+function StaticApp({ webgl }: { webgl: boolean }) {
+  const [lost, setLost] = useState(false)
+  return (
+    <>
+      <div className="static-page">
+        {webgl && !lost ? <Scene onContextLost={() => setLost(true)} /> : <StaticStill />}
+        <HeroOverlay mode="flow" />
+        <Sections layout="static" />
+      </div>
+      <Footer />
+    </>
+  )
+}
+
+function DriveApp() {
+  const [lost, setLost] = useState(false)
+  // A lost context mid-drive drops to the static page rather than leaving
+  // a frozen canvas behind live scroll-driven text.
+  if (lost) return <StaticApp webgl={false} />
+  return (
+    <>
+      <Scene onContextLost={() => setLost(true)} />
       <ScrollSetup />
-      <DebugHud />
+      {DEBUG && <DebugHud />}
 
       {/* DOM, not Canvas children — CLAUDE.md section 1: hero text must
           render immediately regardless of GLB load state, and the loader
@@ -199,19 +278,25 @@ export default function App() {
           gating the hero. */}
       <HeroOverlay />
       <ModelLoader />
+      <TelemetryGauge />
+      <ColumnPane />
 
-      {/* Scroll length until PROMPTS.md step 7 builds the real leg
-          sections — their stacked height becomes the actual scroll
-          distance then, still split the same way (hero + cold start +
-          route). This just gives ScrollSetup's ScrollTrigger something to
-          measure against. Transparent: the fixed canvas above is what's
-          actually seen.
-
-          Height is PAGE_HEIGHT_PX (HERO_PX + COLD_START_PX + ROUTE_PX),
-          not a vh unit — see scrollState.ts for why ROUTE_PX specifically
-          is load-bearing (it's what makes a normal scroll pace equal a
-          normal driving speed; HERO_PX/COLD_START_PX can move freely). */}
-      <div id="page" style={{ height: `${PAGE_HEIGHT_PX}px` }} />
+      {/* The scroll runway. PAGE_HEIGHT_PX (HERO_PX + COLD_START_PX +
+          ROUTE_PX) plus one viewport, so ScrollTrigger's start-top/end-
+          bottom range over it is exactly PAGE_HEIGHT_PX and scroll pixels
+          map 1:1 onto the three budgets — which is what lets each leg's
+          DOM section be placed with a plain pixel offset
+          (scrollState.ts routeToScrollPx). ROUTE_PX is the load-bearing
+          one: it's what makes a normal scroll pace a normal driving
+          speed. */}
+      <main id="page" style={{ height: `calc(${PAGE_HEIGHT_PX}px + 100vh)` }}>
+        <Sections layout="drive" />
+      </main>
+      <Footer />
     </>
   )
+}
+
+export default function App() {
+  return DRIVING ? <DriveApp /> : <StaticApp webgl={HAS_WEBGL} />
 }

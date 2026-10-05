@@ -1,0 +1,7 @@
+raw/
+screenshots/
+project-pages/
+inspect.txt
+node_modules/
+dist/
+*.tsbuildinfo

@@ -3,24 +3,9 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 import { HERO_PX, COLD_START_PX } from './scrollState'
+import { PERSON } from '../content'
 
 gsap.registerPlugin(ScrollTrigger)
-
-// TODO: real GitHub/LinkedIn profile URLs — not guessed (see CLAUDE.md's
-// own rule against fabricating links). Swap these the moment they're known.
-const GITHUB_URL = '#'
-const LINKEDIN_URL = '#'
-const EMAIL = 'tanmaytripathi7525@gmail.com'
-const RESUME_URL = 'https://tanmay-portfolio-3.vercel.app/resume/Tanmay_Tripathi_Resume.pdf'
-
-const linkStyle: React.CSSProperties = {
-  color: 'var(--ink)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 15,
-  textDecoration: 'none',
-  borderBottom: '1px solid currentColor',
-  paddingBottom: 2,
-}
 
 // CLAUDE.md section 1 phase A: "All hero text is DOM and must NOT wait for
 // the GLB — text renders first, the car fades in when loaded." This
@@ -28,18 +13,16 @@ const linkStyle: React.CSSProperties = {
 // it mounts and renders immediately regardless of what's happening inside
 // <Canvas>.
 //
-// The fade-out (phase B, "hero text eases out") is its own ScrollTrigger,
-// separate from the main one in ScrollSetup.tsx but sharing the same
-// `#page` trigger element — multiple triggers on one element is normal
-// GSAP usage. It ends halfway through the cold-start budget, so the hero
-// is fully gone well before the camera finishes arriving at CHASE and the
-// ignition sweep peaks, rather than the two competing for attention at the
-// same instant.
-export function HeroOverlay() {
+// mode 'fixed' (the driving layout): pinned over the canvas, and eases out
+// on its own ScrollTrigger over the hero budget and the first half of cold
+// start — so it's fully gone before the camera finishes arriving at CHASE
+// and the ignition sweep peaks. mode 'flow' (reduced motion / no WebGL):
+// just the first block of an ordinary page.
+export function HeroOverlay({ mode = 'fixed' }: { mode?: 'fixed' | 'flow' }) {
   const copyRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!copyRef.current) return
+    if (mode !== 'fixed' || !copyRef.current) return
     const trigger = ScrollTrigger.create({
       trigger: '#page',
       start: 0,
@@ -53,49 +36,23 @@ export function HeroOverlay() {
       },
     })
     return () => trigger.kill()
-  }, [])
+  }, [mode])
 
   return (
-    <div
-      ref={copyRef}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        height: '100%',
-        width: 'min(36%, 480px)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        gap: 16,
-        padding: '0 48px',
-        zIndex: 5,
-      }}
-    >
-      <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--ink)', margin: 0 }}>
-        Machine learning engineer &amp; full-stack developer
+    <header ref={copyRef} className={`hero hero--${mode}`}>
+      <p className="hero__role">{PERSON.role}</p>
+      <h1 className="hero__name">{PERSON.name}</h1>
+      <p className="hero__summary">{PERSON.summary}</p>
+      <p className="hero__summary hero__proof">
+        Published a traffic-severity model trained on 8,173 incidents. Shipped four systems to production.
       </p>
-      <h1
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'clamp(2.1rem, 4.4vw, 3.2rem)',
-          fontWeight: 600,
-          color: 'var(--ink)',
-          margin: 0,
-          lineHeight: 1.05,
-        }}
-      >
-        Tanmay Tripathi
-      </h1>
-      <p style={{ fontFamily: 'var(--font-body)', fontSize: 17, lineHeight: 1.55, maxWidth: '32ch', color: 'var(--ink)', margin: 0 }}>
-        Ships production ML and full-stack systems — including a published traffic-severity model trained on 8,173 incidents.
-      </p>
-      <div style={{ display: 'flex', gap: 24, marginTop: 8, flexWrap: 'wrap' }}>
-        <a href={GITHUB_URL} style={linkStyle}>GitHub</a>
-        <a href={LINKEDIN_URL} style={linkStyle}>LinkedIn</a>
-        <a href={`mailto:${EMAIL}`} style={linkStyle}>Email</a>
-        <a href={RESUME_URL} target="_blank" rel="noopener noreferrer" style={linkStyle}>Resume</a>
-      </div>
-    </div>
+      <nav className="links hero__links" aria-label="Profiles">
+        <a href={PERSON.github} target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href={PERSON.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn</a>
+        <a href={`mailto:${PERSON.email}`}>Email</a>
+        <a href={PERSON.resume} target="_blank" rel="noopener noreferrer">Resume</a>
+      </nav>
+      {mode === 'fixed' && <p className="hero__hint">Scroll to start the engine</p>}
+    </header>
   )
 }

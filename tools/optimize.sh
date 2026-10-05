@@ -173,13 +173,27 @@ echo "=== gltfjsx ==="
 # of prepare-model.mjs (rotate one node to spin a wheel, one node to swing
 # a door); losing them would silently break section 5. So this runs without
 # -T against our already-optimised porsche-desktop.glb instead, with -K to
-# make gltfjsx keep group nodes rather than pruning them. Verified against
-# the actual output: wheel_FL etc. come through as proper <group> wrappers.
+# make gltfjsx keep group nodes rather than pruning them.
+#
+# -k (lowercase, --keepnames) is separate from -K (uppercase,
+# --keepgroups) and just as required, and was missing here for a while
+# without anyone noticing: -K keeps the <group> WRAPPER from being pruned,
+# but gltfjsx only prints that wrapper's name="..." attribute at all when
+# -k is also set (src/utils/parser.js: `if (obj.name.length && (options.
+# keepnames || ...))`). Without -k, wheel_FL/FR/RL/RR and door_1/door_2
+# still come through as real <group> elements — "verified against the
+# actual output" was checking exactly that and no more — just anonymous
+# ones, so Car.tsx's modelRef.current.getObjectByName('wheel_FL') finds
+# nothing. Car.tsx's `if (wheels.FL)` guard swallowed that silently: the
+# wheels stopped spinning with no error anywhere. Confirmed by diffing
+# this file's own git history: the very first commit's Porsche.tsx has
+# name="wheel_FL" etc.; a rebuild through this script (still only -K, no
+# -k) with the exact same input glb reproducibly loses every one of them.
 mkdir -p "$(dirname "$COMPONENT_OUT")"
 # -r public tells gltfjsx the model is served from public/, so the
 # generated useGLTF() call resolves to /models/porsche-desktop.glb instead
 # of a bare /porsche-desktop.glb that Vite would 404 on.
-npx --yes gltfjsx "$OUT_DIR/porsche-desktop.glb" -t -K -r public -o "$COMPONENT_OUT"
+npx --yes gltfjsx "$OUT_DIR/porsche-desktop.glb" -t -k -K -r public -o "$COMPONENT_OUT"
 
 # gltfjsx@6.5.3 has two TS issues on a model with no animations (ours has
 # none — confirmed in CLAUDE.md section 3): it imports React unused (the
@@ -189,5 +203,15 @@ npx --yes gltfjsx "$OUT_DIR/porsche-desktop.glb" -t -K -r public -o "$COMPONENT_
 # be re-applied here rather than by hand.
 sed -i "/^import React from 'react'$/d" "$COMPONENT_OUT"
 sed -i 's/animations: GLTFAction\[\]/animations: THREE.AnimationClip[]/' "$COMPONENT_OUT"
+# The same component renders both GLBs (the mobile one is the desktop one
+# minus interior meshes, so its missing nodes just render empty). Car.tsx
+# picks the file, so the URL becomes a prop and the hardcoded preload goes
+# — otherwise every phone would download the 5MB desktop model too.
+sed -i "s#export function Model(props: JSX.IntrinsicElements\['group'\]) {#export function Model({ url = '/models/porsche-desktop.glb', ...props }: JSX.IntrinsicElements['group'] \& { url?: string }) {#" "$COMPONENT_OUT"
+sed -i "s#useGLTF('/models/porsche-desktop.glb') as GLTFResult#useGLTF(url) as GLTFResult#" "$COMPONENT_OUT"
+sed -i "/^useGLTF.preload('\/models\/porsche-desktop.glb')$/d" "$COMPONENT_OUT"
+# Interior nodes don't exist in the mobile GLB at all; optional-chain every
+# geometry lookup so they render as empty meshes instead of throwing.
+sed -i 's/nodes\.\([A-Za-z0-9_]*\)\.geometry/nodes.\1?.geometry/g' "$COMPONENT_OUT"
 
 echo "-> $COMPONENT_OUT"

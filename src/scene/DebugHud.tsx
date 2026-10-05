@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 
 import { telemetry } from './telemetry'
 import { scroll } from './scrollState'
+import { modelIntegrity } from './modelIntegrity'
 
 // PROMPTS.md step 4: "Add a debug HUD: scroll progress, speed, steer angle,
 // wheel rotation, fps." This lives outside <Canvas> as plain DOM, so it
@@ -22,9 +23,21 @@ export function DebugHud() {
   const fpsRef = useRef<HTMLSpanElement>(null)
   const phaseRef = useRef<HTMLSpanElement>(null)
   const rpmRef = useRef<HTMLSpanElement>(null)
+  const warningRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let raf = requestAnimationFrame(function tick() {
+      // modelIntegrity.missing only ever fills once, right after Car
+      // mounts — never silently drop this, per the wheel-name regression
+      // it exists for (see modelIntegrity.ts). Set imperatively, display
+      // included: this whole component only ever writes via textContent
+      // (see the file header), so a style driven by React re-render would
+      // never actually update after the first paint.
+      if (warningRef.current) {
+        const hasWarning = modelIntegrity.missing.length > 0
+        warningRef.current.style.display = hasWarning ? 'block' : 'none'
+        warningRef.current.textContent = hasWarning ? `MISSING NODES: ${modelIntegrity.missing.join(', ')}` : ''
+      }
       if (progressRef.current) progressRef.current.textContent = `${(telemetry.progress * 100).toFixed(1)}%`
       if (speedRef.current) speedRef.current.textContent = `${telemetry.speedKmh.toFixed(1)} km/h`
       if (steerRef.current) steerRef.current.textContent = `${telemetry.steerDeg.toFixed(1)}°`
@@ -58,6 +71,18 @@ export function DebugHud() {
         pointerEvents: 'none',
       }}
     >
+      <div
+        ref={warningRef}
+        style={{
+          display: 'none',
+          color: '#fff',
+          background: 'var(--guards)',
+          fontWeight: 700,
+          padding: '4px 6px',
+          marginBottom: 6,
+          borderRadius: 3,
+        }}
+      />
       <div>phase <span ref={phaseRef}>hero 0%</span></div>
       <div>rpm <span ref={rpmRef}>0</span></div>
       <div>progress <span ref={progressRef}>0.0%</span></div>

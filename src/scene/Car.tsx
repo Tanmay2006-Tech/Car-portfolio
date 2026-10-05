@@ -7,10 +7,30 @@ import { Model as PorscheModel } from '../components/Porsche'
 import { GUARDS, srgb } from './colors'
 import { carPose } from './carPose'
 import { ROUTE_CURVE } from './curve'
-import { scroll } from './scrollState'
+import { scroll, driveP, DOOR_OPEN_START, DOOR_OPEN_END } from './scrollState'
 import { telemetry } from './telemetry'
+import { reportMissingNode } from './modelIntegrity'
+import { IS_MOBILE } from '../env'
+import { InfotainmentScreen } from './InfotainmentScreen'
 
-const MODEL_PATH = '/models/porsche-desktop.glb'
+// Mobile gets the interior-stripped GLB (CLAUDE.md section 3: ~2.1MB vs
+// ~4.9MB) — it never sees the cabin, since leg 5 stays outside there.
+const MODEL_PATH = IS_MOBILE ? '/models/porsche-mobile.glb' : '/models/porsche-desktop.glb'
+
+// Driver's door (door_2, -Z) poses, CLAUDE.md section 3's derived facts.
+// Closed is door_1's own pose — the shared FBX->glTF axis correction — not
+// identity. Open is 45 degrees about the front hinge; the translation is in
+// the node's own pre-ancestor-scale units, which is why it's ~100.
+const DOOR_CLOSED_QUAT = new THREE.Quaternion(-0.7071068, 0, 0, 0.7071068)
+const DOOR_OPEN_QUAT = new THREE.Quaternion(-0.6533, -0.2706, -0.2706, 0.6533).normalize()
+const DOOR_CLOSED_POS = new THREE.Vector3(0, 0, 0)
+const DOOR_OPEN_POS = new THREE.Vector3(-106.3989, 0, 90.7349)
+// Engine speed while driving: idle plus a fixed slope against road speed,
+// so ~60km/h cruise reads ~3,300rpm. Not a gearbox model — just enough for
+// the gauge's needle to move with the car instead of sitting at idle.
+const RPM_PER_KMH = 40
+const MAX_RPM = 7200
+const CABIN_LIGHT_INTENSITY = 2.2
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -125,8 +145,11 @@ export function Car() {
   const rootRef = useRef<THREE.Group>(null)
   const dynamicsRef = useRef<THREE.Group>(null)
   const modelRef = useRef<THREE.Group>(null)
+  const cabinLightRef = useRef<THREE.PointLight>(null)
 
   const wheelsRef = useRef<Partial<Record<WheelKey, THREE.Object3D>>>({})
+  const doorRef = useRef<THREE.Object3D | null>(null)
+  const rpmSmoothed = useRef(0)
   const totalLength = useMemo(() => ROUTE_CURVE.getLength(), [])
 
   // Driving state carried between frames — refs, not React state, per
@@ -191,8 +214,13 @@ export function Car() {
     // `transparent` flag once done, so the rest of the session doesn't pay
     // for transparent-object sort order on an opaque car body.
     const allMaterials = Object.values(materials) as THREE.Material[]
+    // Each material's own opacity is kept and faded TO, not overwritten
+    // with 1: the glass and the model's hidden helper meshes
+    // (invisible_all) ship partly or fully transparent, and forcing them
+    // opaque turned the windows black and the helpers into white blobs.
     for (const material of allMaterials) {
       material.userData.__preFadeTransparent = material.transparent
+      material.userData.__preFadeOpacity = material.opacity
       material.transparent = true
       material.opacity = 0
     }
@@ -224,7 +252,7 @@ export function Car() {
     for (const key of WHEEL_NAMES) {
       const wheel = modelRef.current?.getObjectByName(`wheel_${key}`)
       if (!wheel) {
-        console.warn(`Car: wheel_${key} node not found — it will not spin or steer.`)
+        reportMissingNode(`wheel_${key}`, 'it will not spin or steer.')
         continue
       }
       wheel.getWorldPosition(worldPos)
@@ -232,6 +260,14 @@ export function Car() {
       found[key] = wheel
     }
     wheelsRef.current = found
+
+    // door_2 is the driver's door leg 5 opens; door_1 is only checked so a
+    // dropped node name (see modelIntegrity.ts) can never fail silently.
+    for (const doorName of ['door_1', 'door_2']) {
+      const door = modelRef.current?.getObjectByName(doorName)
+      if (!door) reportMissingNode(doorName, "leg 5's cabin entry will have nothing to open.")
+      else if (doorName === 'door_2') doorRef.current = door
+    }
 
     // Car only mounts once useGLTF's Suspense boundary resolves, so this is
     // a reliable "model loaded" signal for tools/measure-fps.mjs.
@@ -252,11 +288,13 @@ export function Car() {
     // every frame forever.
     if (!fadeDone.current) {
       fadeIn.current = THREE.MathUtils.damp(fadeIn.current, 1, FADE_IN_LAMBDA, dt)
-      for (const material of fadeMaterials.current) material.opacity = fadeIn.current
+      for (const material of fadeMaterials.current) {
+        material.opacity = fadeIn.current * ((material.userData.__preFadeOpacity as number) ?? 1)
+      }
       if (fadeIn.current > 0.995) {
         fadeDone.current = true
         for (const material of fadeMaterials.current) {
-          material.opacity = 1
+          material.opacity = (material.userData.__preFadeOpacity as number) ?? 1
           material.transparent = (material.userData.__preFadeTransparent as boolean) ?? false
         }
       }
@@ -267,7 +305,9 @@ export function Car() {
     // routeP is already 0 for the first two and real curve progress only
     // once scroll passes into the route budget — the car stays parked at
     // the route's start through both hero and cold start.
-    const p = THREE.MathUtils.clamp(scroll.routeP, 0.0001, 0.9999)
+    // driveP: identical to routeP until leg 5, where the car brakes to a
+    // stop while scroll carries on through the door and cabin beats.
+    const p = THREE.MathUtils.clamp(driveP(scroll.routeP), 0.0001, 0.9999)
     const pos = ROUTE_CURVE.getPointAt(p, scratchPos.current)
 
     if (prevPos.current === null) {
@@ -392,7 +432,28 @@ export function Car() {
       const fall = THREE.MathUtils.smootherstep(scroll.phaseProgress, 0.22, 0.6)
       telemetry.rpm = THREE.MathUtils.lerp(0, IGNITION_PEAK_RPM, rise) * (1 - fall) + IDLE_RPM * fall
     } else {
-      telemetry.rpm = IDLE_RPM
+      const target = Math.min(MAX_RPM, IDLE_RPM + smoothedSpeed.current * 3.6 * RPM_PER_KMH)
+      rpmSmoothed.current = THREE.MathUtils.damp(rpmSmoothed.current || IDLE_RPM, target, 4, dt)
+      telemetry.rpm = rpmSmoothed.current
+    }
+
+    // Driver's door, leg 5. Pure function of scroll like the ignition cues,
+    // so scrolling back up closes it again. Desktop only: mobile never goes
+    // inside, so there's nothing to open the door onto.
+    const door = doorRef.current
+    if (door && !IS_MOBILE) {
+      const open = THREE.MathUtils.smootherstep(scroll.routeP, DOOR_OPEN_START, DOOR_OPEN_END)
+      door.quaternion.slerpQuaternions(DOOR_CLOSED_QUAT, DOOR_OPEN_QUAT, open)
+      door.position.lerpVectors(DOOR_CLOSED_POS, DOOR_OPEN_POS, open)
+    }
+
+    // Cabin fill: the interior is dark leather under a roof, and the HDRI
+    // alone leaves it nearly black from the driver's seat. Always mounted
+    // (so adding it never triggers a shader recompile mid-scroll), lit
+    // only as the door opens.
+    const cabinLight = cabinLightRef.current
+    if (cabinLight) {
+      cabinLight.intensity = IS_MOBILE ? 0 : CABIN_LIGHT_INTENSITY * THREE.MathUtils.smootherstep(scroll.routeP, DOOR_OPEN_START, DOOR_OPEN_END)
     }
 
     prevPos.current.copy(pos)
@@ -409,6 +470,7 @@ export function Car() {
     fpsEma.current = THREE.MathUtils.damp(fpsEma.current, dt > 0 ? 1 / dt : fpsEma.current, 4, dt)
     telemetry.progress = p
     telemetry.speedKmh = speed * 3.6
+    telemetry.speedSmoothKmh = smoothedSpeed.current * 3.6
     telemetry.steerDeg = THREE.MathUtils.radToDeg(steer)
     telemetry.wheelDeg = wheels.FL ? THREE.MathUtils.radToDeg(wheels.FL.rotation.z % (Math.PI * 2)) : 0
     telemetry.rollDeg = THREE.MathUtils.radToDeg(dynamics.rotation.x)
@@ -440,7 +502,9 @@ export function Car() {
       <ContactShadows position={[0, 0, 0]} opacity={0.35} scale={8} blur={1.5} far={1.2} frames={1} />
       <group ref={dynamicsRef}>
         <group ref={modelRef}>
-          <PorscheModel />
+          <PorscheModel url={MODEL_PATH} />
+          {!IS_MOBILE && <InfotainmentScreen />}
+          <pointLight ref={cabinLightRef} position={[0.1, 1.05, 0]} intensity={0} distance={2.6} decay={1.4} color="#ffe8d2" />
         </group>
       </group>
     </group>

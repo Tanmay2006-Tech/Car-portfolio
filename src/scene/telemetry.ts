@@ -6,6 +6,9 @@
 export const telemetry = {
   progress: 0,
   speedKmh: 0,
+  // Damped copy for the on-screen gauge; speedKmh stays raw for the
+  // calibration tools (tools/measure-speed.mjs).
+  speedSmoothKmh: 0,
   steerDeg: 0,
   wheelDeg: 0,
   rollDeg: 0,

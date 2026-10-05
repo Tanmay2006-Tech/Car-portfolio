@@ -557,11 +557,45 @@ for (const key of ['FL', 'FR', 'RL', 'RR']) {
 
 console.log('[8/13] Detecting door pose and closing an open door if found ...');
 
-const bodyBounds = getBounds(findNode('body_all_body_main_0'));
-const doorReport = {};
+// CAUGHT BY RENDERING THE RESULT AND LOOKING, not by reading transforms:
+// this used to close an open door by resetting its local transform to
+// TRUE identity (0,0,0 / 0,0,0,1). That's wrong for this file — door_1
+// (never posed open, so its own local transform IS the correct "closed"
+// reference) carries a non-identity rotation, (-0.7071, 0, 0, 0.7071), a
+// -90deg-about-X axis correction that's baked onto every top-level part
+// from the FBX->glTF conversion (mirror_middle, the car's own centrally-
+// mounted interior mirror, carries the exact same rotation despite having
+// no left/right side at all — confirming it's a universal axis fix, not
+// part of either door's specific pose). Resetting door_2 to TRUE identity
+// instead of that shared correction rotated its entire subtree by an
+// extra ~90deg it should never have had, which is why mirror_door_2 (and
+// everything else under door_2) rendered symmetrically WRONG — not "the
+// mirror specifically forgot to follow its parent," the whole door_2
+// subtree was closing to the wrong reference frame; the mirror was just
+// the one place it was obvious (a bare-metal panel hanging in mid-cabin
+// air reads as "small offset near a doubled mirror", not as "entire door
+// misoriented", from most camera angles).
+//
+// Fixed by deriving the closed pose from whichever door was NEVER open
+// (its own current local transform, unmodified) instead of assuming any
+// fixed value — verified directly: applying door_1's rotation to door_2
+// puts mirror_door_1 and mirror_door_2's world centres at (X, Y, +/-Z) —
+// symmetric to numerical noise (dX=dY=0, Z sum=0), not the previous wildly
+// asymmetric result.
 
-for (const doorName of ['door_1', 'door_2']) {
-  const node = findNode(doorName);
+const bodyBounds = getBounds(findNode('body_all_body_main_0'));
+const doorNames = ['door_1', 'door_2'];
+const doorNodes = Object.fromEntries(doorNames.map((n) => [n, findNode(n)]));
+
+// Snapshot BEFORE any mutation — door_2's fix reads door_1's ORIGINAL pose,
+// and mutating in loop order would corrupt that if door_1 were the open one.
+const rawTransform = Object.fromEntries(
+  doorNames.map((n) => [n, { t: doorNodes[n].getTranslation(), q: doorNodes[n].getRotation() }])
+);
+
+const doorOpenFlags = {};
+for (const doorName of doorNames) {
+  const node = doorNodes[doorName];
   const bounds = getBounds(node);
   const side = doorName === driverDoorName ? driverZSide : -driverZSide;
   const doorOuterZ = side > 0 ? bounds.max[2] : bounds.min[2];
@@ -569,52 +603,91 @@ for (const doorName of ['door_1', 'door_2']) {
   const protrusion = Math.abs(doorOuterZ - bodyOuterZ);
   const transformIsIdentity = isIdentityTransform(node);
   const open = !transformIsIdentity && protrusion > DOOR_OPEN_PROTRUSION_M;
-
+  doorOpenFlags[doorName] = { open, protrusion };
   console.log(
     `    ${doorName}: protrusion beyond body = ${protrusion.toFixed(4)} m, local transform identity = ${transformIsIdentity} -> ${
       open ? 'OPEN' : 'closed'
     }`
   );
+}
 
+const openDoors = doorNames.filter((n) => doorOpenFlags[n].open);
+if (openDoors.length > 1) {
+  throw new Error(
+    `Both doors read as open (${openDoors.join(', ')}) — there is no closed sibling to derive the correct ` +
+      'reference pose from. This needs a human to look at the source file, not a guessed fallback.'
+  );
+}
+
+const doorReport = {};
+for (const doorName of doorNames) {
+  const { open, protrusion } = doorOpenFlags[doorName];
   doorReport[doorName] = { protrusion, open };
+  if (!open) continue;
 
-  if (open) {
-    const t = node.getTranslation();
-    const q = node.getRotation();
-    const { axis, angle } = quatAxisAngle(q);
+  const node = doorNodes[doorName];
+  const closedDoorName = doorNames.find((n) => n !== doorName);
+  const closedRef = rawTransform[closedDoorName];
+  const openT = rawTransform[doorName].t;
+  const openQ = rawTransform[doorName].q;
 
-    // Decompose t into components parallel/perpendicular to the hinge axis,
-    // then solve for the pivot in the perpendicular plane: (I - R) * P = t_perp.
-    const tParallel = v3.scale(axis, v3.dot(t, axis));
-    const tPerp = v3.sub(t, tParallel);
-
-    let u = v3.cross(axis, [0, 1, 0]);
-    if (v3.length(u) < 1e-6) u = v3.cross(axis, [1, 0, 0]);
-    u = v3.normalize(u);
-    const w = v3.cross(axis, u); // right-handed: axis, u, w
-
-    const tu = v3.dot(tPerp, u);
-    const tw = v3.dot(tPerp, w);
-
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
-    const det = 2 - 2 * cosA;
-    // (I - R2D) = [[1-cosA, sinA], [-sinA, 1-cosA]], solve for [pu, pw]
-    const pu = (1 - cosA) * tu - sinA * tw;
-    const pw = sinA * tu + (1 - cosA) * tw;
-    const pivotPerp = v3.add(v3.scale(u, pu / det), v3.scale(w, pw / det));
-
-    console.log(`      hinge axis (local space): ${fmt3(axis)}`);
-    console.log(`      hinge angle: ${((angle * 180) / Math.PI).toFixed(2)} deg`);
-    console.log(`      hinge pivot (local space): ${fmt3(pivotPerp)}`);
-    console.log(`      translation-along-axis (should be ~0 for a pure hinge): ${v3.length(tParallel).toFixed(5)} m`);
-    console.log(`      closing rotation applied: reset local transform to identity`);
-
-    doorReport[doorName].hinge = { axis, angle, pivot: pivotPerp, openTranslation: t, openRotation: q };
-
-    node.setTranslation([0, 0, 0]);
-    node.setRotation([0, 0, 0, 1]);
+  // Hinge axis/angle/pivot describe the rotation from CLOSED to OPEN, not
+  // from world identity — decompose the relative transform (open relative
+  // to the closed reference), or the reported pivot would be solving the
+  // wrong equation, same mistake as the reset itself.
+  const openMinusClosedT = v3.sub(openT, closedRef.t);
+  const qClosedInv = [-closedRef.q[0], -closedRef.q[1], -closedRef.q[2], closedRef.q[3]];
+  function quatMul(a, b) {
+    return [
+      a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+      a[3] * b[1] + a[1] * b[3] + a[2] * b[0] - a[0] * b[2],
+      a[3] * b[2] + a[2] * b[3] + a[0] * b[1] - a[1] * b[0],
+      a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+    ];
   }
+  const relativeQ = quatMul(qClosedInv, openQ);
+  const { axis, angle } = quatAxisAngle(relativeQ);
+
+  // Decompose t into components parallel/perpendicular to the hinge axis,
+  // then solve for the pivot in the perpendicular plane: (I - R) * P = t_perp.
+  const tParallel = v3.scale(axis, v3.dot(openMinusClosedT, axis));
+  const tPerp = v3.sub(openMinusClosedT, tParallel);
+
+  let u = v3.cross(axis, [0, 1, 0]);
+  if (v3.length(u) < 1e-6) u = v3.cross(axis, [1, 0, 0]);
+  u = v3.normalize(u);
+  const w = v3.cross(axis, u); // right-handed: axis, u, w
+
+  const tu = v3.dot(tPerp, u);
+  const tw = v3.dot(tPerp, w);
+
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+  const det = 2 - 2 * cosA;
+  // (I - R2D) = [[1-cosA, sinA], [-sinA, 1-cosA]], solve for [pu, pw]
+  const pu = (1 - cosA) * tu - sinA * tw;
+  const pw = sinA * tu + (1 - cosA) * tw;
+  const pivotPerp = v3.add(v3.scale(u, pu / det), v3.scale(w, pw / det));
+
+  console.log(`      closed reference taken from ${closedDoorName} (never posed open)`);
+  console.log(`      hinge axis (local space, closed->open): ${fmt3(axis)}`);
+  console.log(`      hinge angle: ${((angle * 180) / Math.PI).toFixed(2)} deg`);
+  console.log(`      hinge pivot (local space, relative to closed): ${fmt3(pivotPerp)}`);
+  console.log(`      translation-along-axis (should be ~0 for a pure hinge): ${v3.length(tParallel).toFixed(5)} m`);
+  console.log(`      closing rotation applied: reset local transform to ${closedDoorName}'s pose (NOT true identity)`);
+
+  doorReport[doorName].hinge = {
+    axis,
+    angle,
+    pivot: pivotPerp,
+    openTranslation: openT,
+    openRotation: openQ,
+    closedTranslation: closedRef.t,
+    closedRotation: closedRef.q,
+  };
+
+  node.setTranslation(closedRef.t);
+  node.setRotation(closedRef.q);
 }
 
 // ---------------------------------------------------------------------------
@@ -806,12 +879,17 @@ for (const doorName of ['door_1', 'door_2']) {
   const r = doorReport[doorName];
   if (r.open) {
     console.log(
-      `  ${doorName}: was OPEN (protrusion ${r.protrusion.toFixed(3)} m). Closed by resetting local transform to identity.`
+      `  ${doorName}: was OPEN (protrusion ${r.protrusion.toFixed(3)} m). Closed by resetting local transform to ` +
+        `the never-opened sibling door's own pose (NOT true identity — see the comment above this report for why).`
     );
     console.log(
       `    simplest re-open path: lerp/slerp this node's local translation & rotation from`
     );
-    console.log(`      closed = translation (0,0,0), rotation (0,0,0,1)`);
+    console.log(
+      `      closed = translation ${fmt3(r.hinge.closedTranslation)}, rotation (${r.hinge.closedRotation
+        .map((n) => n.toFixed(4))
+        .join(', ')})`
+    );
     console.log(
       `      open   = translation ${fmt3(r.hinge.openTranslation)}, rotation (${r.hinge.openRotation
         .map((n) => n.toFixed(4))

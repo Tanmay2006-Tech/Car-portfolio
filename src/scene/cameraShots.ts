@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 
 import { LEG_START, OPENING_STRAIGHT_END } from './legs'
+import { DOOR_OPEN_START, DOOR_OPEN_END, CABIN_REACHED } from './scrollState'
+import { IS_MOBILE } from '../env'
 
 // A shot is described in the CAR's local frame (CLAUDE.md section 3: forward
 // is +X, up is +Y, the passenger side is +Z, and the driver's side is -Z), so
@@ -27,7 +29,7 @@ export interface Shot {
 // axis right of the stage per section 2's layout — same stageBias sign as
 // CHASE below, so the hand-off during the cold-start blend doesn't also
 // have to cross the frame's centre line.
-export const HERO: Shot = { azimuthDeg: 160, radius: 6.2, height: 0.95, aimX: 0.1, aimY: 0.6, aimZ: 0, fov: 32, stageBias: 0.32 }
+export const HERO: Shot = { azimuthDeg: 160, radius: 6.9, height: 0.95, aimX: 0.1, aimY: 0.6, aimZ: 0, fov: 32, stageBias: 0.24 }
 
 // Rear three-quarter, low. The default for legs 0, 2 and 3: a low camera reads
 // fast and planted, a centred one reads like a product shot (CLAUDE.md section 2).
@@ -41,18 +43,50 @@ export const CHASE: Shot = { azimuthDeg: 14, radius: 7, height: 1.25, aimX: 0.4,
 const SIDE: Shot = { azimuthDeg: 90, radius: 8.5, height: 0.75, aimX: 0, aimY: 0.65, aimZ: 0, fov: 32, stageBias: 0.34 }
 
 // Leg 4: wheel height, close, wide enough that the road surface carries the frame.
-const LOW: Shot = { azimuthDeg: 8, radius: 5.6, height: 0.5, aimX: 1, aimY: 0.45, aimZ: 0, fov: 42, stageBias: 0.3 }
+// Aimed a few metres ahead of the car so the risk layer it's driving into
+// fills the lower frame, not just the bumper.
+const LOW: Shot = { azimuthDeg: 10, radius: 7.4, height: 0.85, aimX: 3, aimY: 0.35, aimZ: 0, fov: 40, stageBias: 0.28 }
 
-// Leg 5, in two beats: swing round to the driver's side (-Z), then push in
-// toward the door. Step 6 opens the door and takes the camera inside; this
-// ends outside it at window height. The stage bias goes to 0 — the column
+// Leg 5 outside the car: swing round to the driver's side (-Z), then push
+// in toward the door while it opens. The stage bias goes to 0 — the column
 // drops away and the car fills the frame (CLAUDE.md section 2).
 const DOOR_SWING: Shot = { azimuthDeg: -70, radius: 5, height: 1.15, aimX: 0.2, aimY: 0.9, aimZ: -0.5, fov: 38, stageBias: 0.12 }
 const DOOR_PUSH: Shot = { azimuthDeg: -88, radius: 2.4, height: 1.2, aimX: 0.2, aimY: 1, aimZ: -0.5, fov: 45, stageBias: 0 }
 
+// Inside, two beats once the driver's door (door_2, -Z) is open: CABIN_ENTER
+// sits in the door aperture, CABIN is the driver's eye looking across the
+// dash to the infotainment screen. Aim and height are in the car's local
+// frame, same as every other shot — tuned against real renders.
+const CABIN_ENTER: Shot = { azimuthDeg: -63, radius: 1.15, height: 1.08, aimX: 0.3, aimY: 0.85, aimZ: -0.3, fov: 55, stageBias: 0 }
+const CABIN: Shot = { azimuthDeg: -22, radius: 0.97, height: 1.05, aimX: 0.55, aimY: 0.85, aimZ: 0, fov: 58, stageBias: 0 }
+
 // Progress -> shot. Holds are two keyframes with the same shot; the blend
 // between neighbours is eased so a leg boundary never reads as a cut.
+//
+// Exported: the ONE route-progress value past which the camera is
+// genuinely done moving for the rest of the route — QualityMonitor.tsx
+// needs this specifically, not just "somewhere in leg 5".
+export const FINAL_HOLD_P = CABIN_REACHED
 const [, LEG1, , , LEG4, LEG5] = LEG_START
+
+// Mobile skips the cabin (CLAUDE.md section 7: the interior is stripped
+// from the light GLB) — leg 5 ends as an exterior close-up at the door.
+const LEG5_FRAMES: ReadonlyArray<readonly [number, Shot]> = IS_MOBILE
+  ? [
+      [LEG5 + 0.035, DOOR_SWING],
+      [DOOR_OPEN_START, DOOR_SWING],
+      [FINAL_HOLD_P, DOOR_PUSH],
+      [1, DOOR_PUSH],
+    ]
+  : [
+      [LEG5 + 0.035, DOOR_SWING],
+      [DOOR_OPEN_START, DOOR_SWING],
+      [DOOR_OPEN_END - 0.004, DOOR_PUSH],
+      [DOOR_OPEN_END + 0.008, CABIN_ENTER],
+      [FINAL_HOLD_P, CABIN],
+      [1, CABIN],
+    ]
+
 const KEYFRAMES: ReadonlyArray<readonly [number, Shot]> = [
   [0, CHASE],
   [LEG1, CHASE],
@@ -63,11 +97,8 @@ const KEYFRAMES: ReadonlyArray<readonly [number, Shot]> = [
   [OPENING_STRAIGHT_END, CHASE],
   [LEG4 - 0.02, CHASE],
   [LEG4 + 0.02, LOW],
-  [LEG5 - 0.02, LOW],
-  [LEG5 + 0.025, DOOR_SWING],
-  [LEG5 + 0.045, DOOR_SWING],
-  [0.985, DOOR_PUSH],
-  [1, DOOR_PUSH],
+  [LEG5 - 0.01, LOW],
+  ...LEG5_FRAMES,
 ]
 
 // The sampler assumes ascending progress. A bad edit to LEG_START (or a

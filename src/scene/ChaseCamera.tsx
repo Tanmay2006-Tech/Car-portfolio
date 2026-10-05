@@ -8,6 +8,7 @@ import type { Shot } from './cameraShots'
 import { carPose } from './carPose'
 import { telemetry } from './telemetry'
 import { scroll } from './scrollState'
+import { IS_MOBILE } from '../env'
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -23,6 +24,7 @@ const CAMERA_YAW_LAMBDA = 2
 // at rest. The cornering lag comes from the yaw above; this only softens
 // scroll jitter and the blends between shots.
 const CAMERA_POSITION_LAMBDA = 8
+const MOBILE_RADIUS_SCALE = 1.25
 
 function shortestAngleDiff(a: number, b: number) {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b))
@@ -67,7 +69,10 @@ export function ChaseCamera() {
     // rather than three differently-paced ones stitched together.
     let s: Shot
     if (scroll.phase === 'route') {
-      s = sampleShot(carPose.progress, shot.current)
+      // Scroll's own route progress, not carPose.progress: in leg 5 the car
+      // brakes to a stop (scrollState.ts driveP) while the camera keeps
+      // moving through the door and cabin beats on the linear budget.
+      s = sampleShot(scroll.routeP, shot.current)
     } else {
       // 'hero': t=0, pure HERO, held for the whole HERO_PX budget.
       // 'coldstart': eases 0->1 across COLD_START_PX, arriving at exactly
@@ -84,8 +89,11 @@ export function ChaseCamera() {
     // Where the camera wants to be: an orbit around the aim point, laid out in
     // the LAGGED frame, on top of the car's exact world position.
     const az = THREE.MathUtils.degToRad(s.azimuthDeg)
+    // Mobile's 45vh strip is close to square, so every exterior shot sits
+    // a little further back to keep the whole car in frame.
+    const radius = IS_MOBILE ? s.radius * MOBILE_RADIUS_SCALE : s.radius
     const ideal = scratchIdeal.current
-      .set(s.aimX - s.radius * Math.cos(az), s.height, s.aimZ + s.radius * Math.sin(az))
+      .set(s.aimX - radius * Math.cos(az), s.height, s.aimZ + radius * Math.sin(az))
       .applyAxisAngle(UP, camYaw.current)
       .add(carPose.position)
     // What it looks at: a point on the car, in the car's TRUE frame, so the
@@ -113,7 +121,10 @@ export function ChaseCamera() {
     const distance = forward.length()
     const right = scratchRight.current.crossVectors(forward, UP).normalize()
     const halfWidth = distance * Math.tan(THREE.MathUtils.degToRad(s.fov) / 2) * camera.aspect
-    const shifted = forward.copy(aimPos.current).addScaledVector(right, -s.stageBias * halfWidth)
+    // Mobile has no side column — the content sits below the car — so the
+    // car is centred in its 45vh strip instead of pushed right.
+    const bias = IS_MOBILE ? 0 : s.stageBias
+    const shifted = forward.copy(aimPos.current).addScaledVector(right, -bias * halfWidth)
 
     camera.up.copy(UP)
     camera.position.copy(camPos.current)
