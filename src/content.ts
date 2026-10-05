@@ -13,7 +13,7 @@ export const PERSON = {
   email: 'Tanmaytripathi7525@gmail.com',
   github: 'https://github.com/Tanmay2006-Tech',
   linkedin: 'https://www.linkedin.com/in/tanmay-tripathi-3a3139234/',
-  resume: '/resume.pdf',
+  resume: `${import.meta.env.BASE_URL}resume.pdf`,
 }
 
 export interface Project {

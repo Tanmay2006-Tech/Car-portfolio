@@ -15,7 +15,8 @@ import { InfotainmentScreen } from './InfotainmentScreen'
 
 // Mobile gets the interior-stripped GLB (CLAUDE.md section 3: ~2.1MB vs
 // ~4.9MB) — it never sees the cabin, since leg 5 stays outside there.
-const MODEL_PATH = IS_MOBILE ? '/models/porsche-mobile.glb' : '/models/porsche-desktop.glb'
+// Relative to the deploy base, so the site works from a sub-path too.
+const MODEL_PATH = `${import.meta.env.BASE_URL}models/porsche-${IS_MOBILE ? 'mobile' : 'desktop'}.glb`
 
 // Driver's door (door_2, -Z) poses, CLAUDE.md section 3's derived facts.
 // Closed is door_1's own pose — the shared FBX->glTF axis correction — not

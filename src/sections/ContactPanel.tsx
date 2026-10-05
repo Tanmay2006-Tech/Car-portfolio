@@ -8,6 +8,20 @@ import { PERSON } from '../content'
 // filled in — nothing is collected or stored by the site itself.
 export function ContactPanel() {
   const [sent, setSent] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  // Mail links don't open anything for every visitor (no mail app set up,
+  // or an embedded viewer that blocks them), so the address is always
+  // visible as text and one click copies it.
+  async function copyEmail(event: React.MouseEvent<HTMLButtonElement>) {
+    try {
+      await navigator.clipboard.writeText(PERSON.email)
+      setCopied(true)
+    } catch {
+      const text = event.currentTarget.parentElement?.querySelector('.contact__email')
+      if (text) window.getSelection()?.selectAllChildren(text)
+    }
+  }
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -24,26 +38,29 @@ export function ContactPanel() {
   return (
     <div className="contact">
       <h2>Get in touch</h2>
-      <p>
-        Write to <a href={`mailto:${PERSON.email}`}>{PERSON.email}</a>, or use the form.
+      <p className="contact__line">
+        <span className="contact__email">{PERSON.email}</span>
+        <button type="button" className="copy" onClick={copyEmail}>
+          {copied ? 'Copied' : 'Copy email'}
+        </button>
       </p>
       <form className="form" onSubmit={onSubmit}>
         <label>
           <span>Name</span>
-          <input name="name" autoComplete="name" required />
+          <input id="contact-name" name="name" autoComplete="name" required />
         </label>
         <label>
           <span>Email</span>
-          <input name="email" type="email" autoComplete="email" required />
+          <input id="contact-email" name="email" type="email" autoComplete="email" required />
         </label>
         <label className="form__wide">
           <span>Message</span>
-          <textarea name="message" rows={3} required />
+          <textarea id="contact-message" name="message" rows={3} required />
         </label>
         <div className="form__wide form__row">
           <button type="submit" className="cta">Send message</button>
           <p className="form__status" role="status">
-            {sent ? 'Your mail app should open with the message ready to send.' : ''}
+            {sent ? 'Opening your mail app with this message. If nothing opened, copy the address above.' : ''}
           </p>
         </div>
       </form>

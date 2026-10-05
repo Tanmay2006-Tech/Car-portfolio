@@ -381,6 +381,25 @@ p {
 .form__status {
   font-size: 14px;
 }
+.contact__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.contact__email {
+  user-select: all;
+  font-weight: 500;
+}
+.copy {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  padding: 4px 10px;
+  cursor: pointer;
+}
 /* The one --guards CTA on the site (CLAUDE.md section 2). */
 .cta {
   font: inherit;

@@ -39,7 +39,11 @@ const RiskLayer = lazy(() => import('./scene/RiskLayer'))
 
 // A still of the parked car at the hero angle, for browsers without WebGL
 // (CLAUDE.md section 7) — and for a context lost mid-session.
-const STATIC_HERO_IMAGE = '/hero-static.jpg'
+const STATIC_HERO_IMAGE = `${import.meta.env.BASE_URL}hero-static.jpg`
+// Self-hosted copy of drei's "sunset" preset (venice_sunset_1k.hdr) — the
+// preset itself fetches from a third-party CDN at runtime, which is one
+// more thing that can fail or be blocked on the live site.
+const HDRI = `${import.meta.env.BASE_URL}hdri/venice_sunset_1k.hdr`
 
 // Confirmed: THREE.ColorManagement.enabled defaults true (three@0.186.0),
 // and nothing in this codebase sets it false. Asserted here rather than
@@ -167,7 +171,7 @@ function Scene({ onContextLost }: { onContextLost: () => void }) {
               hue. preset="sunset" (venice_sunset_1k.hdr) is warm and puts the
               rendered ground back in the token's own channel order. Verified by
               sampling real pixels under both, ACES held fixed throughout. */}
-          <Environment preset="sunset" environmentIntensity={0.35} />
+          <Environment files={HDRI} environmentIntensity={0.35} />
 
           <Suspense fallback={null}>
             <Car />
