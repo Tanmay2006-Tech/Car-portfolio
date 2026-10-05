@@ -1,5 +1,5 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -13,10 +13,17 @@ import { reportMissingNode } from './modelIntegrity'
 import { IS_MOBILE } from '../env'
 import { InfotainmentScreen } from './InfotainmentScreen'
 
-// Mobile gets the interior-stripped GLB (CLAUDE.md section 3: ~2.1MB vs
-// ~4.9MB) — it never sees the cabin, since leg 5 stays outside there.
-// Relative to the deploy base, so the site works from a sub-path too.
-const MODEL_PATH = `${import.meta.env.BASE_URL}models/porsche-${IS_MOBILE ? 'mobile' : 'desktop'}.glb`
+// What loads first is only what the outside of the car needs, so it can
+// appear as soon as possible: on desktop the exterior half of the split
+// model (tools/split-interior.mjs, ~2.6MB instead of ~4.8MB), on mobile the
+// interior-stripped GLB. The desktop cabin streams in afterwards (Interior
+// below); mobile never goes inside. Relative to the deploy base, so the
+// site works from a sub-path too.
+const MODEL_PATH = `${import.meta.env.BASE_URL}models/porsche-${IS_MOBILE ? 'mobile' : 'exterior'}.glb`
+const INTERIOR_PATH = `${import.meta.env.BASE_URL}models/porsche-interior.glb`
+// Wait this long after the exterior is on screen before fetching the
+// cabin, so it never competes with the first impression.
+const INTERIOR_DELAY_MS = 800
 
 // Driver's door (door_2, -Z) poses, CLAUDE.md section 3's derived facts.
 // Closed is door_1's own pose — the shared FBX->glTF axis correction — not
@@ -144,6 +151,13 @@ function headingAngleFromTangent(tangent: THREE.Vector3) {
 // explicit sRGB->linear conversion, not a raw numeric assignment.
 export function Car() {
   const { materials } = useGLTF(MODEL_PATH)
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  const camera = useThree((s) => s.camera)
+  // False until every shader the car needs has finished compiling (see the
+  // compileAsync call below). Plain state: flips exactly once.
+  const [revealed, setRevealed] = useState(false)
+  const revealedRef = useRef(false)
 
   // Three nested groups, each owning one layer of the rig:
   //  - rootRef: position along the curve + yaw heading
@@ -158,7 +172,14 @@ export function Car() {
   const cabinLightRef = useRef<THREE.PointLight>(null)
 
   const wheelsRef = useRef<Partial<Record<WheelKey, THREE.Object3D>>>({})
-  const doorRef = useRef<THREE.Object3D | null>(null)
+  // Every door_2 node: the exterior file's, then the interior file's once
+  // it streams in — both halves of the door have to swing together.
+  const doorsRef = useRef<THREE.Object3D[]>([])
+  const [loadInterior, setLoadInterior] = useState(false)
+  // Stable, so Interior's one-time setup effect never re-runs.
+  const addDoor = useCallback((door: THREE.Object3D) => {
+    if (!doorsRef.current.includes(door)) doorsRef.current.push(door)
+  }, [])
   const rpmSmoothed = useRef(0)
   const routeSmooth = useRef<number | null>(null)
   const totalLength = useMemo(() => ROUTE_CURVE.getLength(), [])
@@ -277,13 +298,52 @@ export function Car() {
     for (const doorName of ['door_1', 'door_2']) {
       const door = modelRef.current?.getObjectByName(doorName)
       if (!door) reportMissingNode(doorName, "leg 5's cabin entry will have nothing to open.")
-      else if (doorName === 'door_2') doorRef.current = door
+      else if (doorName === 'door_2') doorsRef.current = [door]
     }
 
-    // Car only mounts once useGLTF's Suspense boundary resolves, so this is
-    // a reliable "model loaded" signal for tools/measure-fps.mjs.
-    ;(window as unknown as { __appReady?: boolean }).__appReady = true
-  }, [materials])
+    // Shader compilation was 73% of load time (tools/profile-load.mjs):
+    // drawing the car the first time compiles ~40 programs one after
+    // another on the main thread, freezing the page for seconds after the
+    // download had already finished. Instead the car's meshes start on a
+    // layer the camera doesn't render, compileAsync builds every program in
+    // parallel without blocking (KHR_parallel_shader_compile), and only
+    // then does the car switch back to layer 0 and begin its fade-in.
+    // Only meshes move layers — lights stay put, or the light count would
+    // differ between compile and first draw and every program would be
+    // rebuilt anyway.
+    const meshes: THREE.Object3D[] = []
+    modelRef.current?.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) {
+        o.layers.set(1)
+        meshes.push(o)
+      }
+    })
+    let cancelled = false
+    const reveal = () => {
+      if (cancelled) return
+      for (const m of meshes) m.layers.set(0)
+      revealedRef.current = true
+      setRevealed(true)
+      // The "car is on screen" signal the tools under tools/ wait for.
+      ;(window as unknown as { __appReady?: boolean }).__appReady = true
+    }
+    // Compile against a linear render target, not the canvas: every frame
+    // is actually drawn into EffectComposer's buffer, and three keys its
+    // programs on output colour space and tone mapping, both of which
+    // differ between the two. Compiling for the canvas built ~40 programs
+    // nobody would use and left the real ones to compile, blocking, on the
+    // first frame. compile() reads the current target synchronously, so it
+    // only needs to be set for the call itself.
+    const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
+    const previous = gl.getRenderTarget()
+    gl.setRenderTarget(target)
+    const compiling = gl.compileAsync(scene, camera)
+    gl.setRenderTarget(previous)
+    compiling.then(reveal, reveal).finally(() => target.dispose())
+    return () => {
+      cancelled = true
+    }
+  }, [materials, gl, scene, camera])
 
   useFrame((state, rawDelta) => {
     const root = rootRef.current
@@ -297,7 +357,7 @@ export function Car() {
     // Fade-in: ramps once per mount, then stops touching these materials
     // at all (fadeDone) rather than writing opacity=1/transparent=false
     // every frame forever.
-    if (!fadeDone.current) {
+    if (!fadeDone.current && revealedRef.current) {
       fadeIn.current = THREE.MathUtils.damp(fadeIn.current, 1, FADE_IN_LAMBDA, dt)
       for (const material of fadeMaterials.current) {
         material.opacity = fadeIn.current * ((material.userData.__preFadeOpacity as number) ?? 1)
@@ -469,11 +529,12 @@ export function Car() {
     // Driver's door, leg 5. Pure function of scroll like the ignition cues,
     // so scrolling back up closes it again. Desktop only: mobile never goes
     // inside, so there's nothing to open the door onto.
-    const door = doorRef.current
-    if (door && !IS_MOBILE) {
+    if (!IS_MOBILE) {
       const open = THREE.MathUtils.smootherstep(routeP, DOOR_OPEN_START, DOOR_OPEN_END)
-      door.quaternion.slerpQuaternions(DOOR_CLOSED_QUAT, DOOR_OPEN_QUAT, open)
-      door.position.lerpVectors(DOOR_CLOSED_POS, DOOR_OPEN_POS, open)
+      for (const door of doorsRef.current) {
+        door.quaternion.slerpQuaternions(DOOR_CLOSED_QUAT, DOOR_OPEN_QUAT, open)
+        door.position.lerpVectors(DOOR_CLOSED_POS, DOOR_OPEN_POS, open)
+      }
     }
 
     // Cabin fill: the interior is dark leather under a roof, and the HDRI
@@ -508,6 +569,12 @@ export function Car() {
     telemetry.fps = fpsEma.current
   })
 
+  useEffect(() => {
+    if (!revealed || IS_MOBILE) return
+    const id = window.setTimeout(() => setLoadInterior(true), INTERIOR_DELAY_MS)
+    return () => window.clearTimeout(id)
+  }, [revealed])
+
   return (
     <group ref={rootRef}>
       {/* Tyre contact patches only. This renders straight down from an
@@ -528,14 +595,93 @@ export function Car() {
           carries along every frame — no per-frame code needed here, and
           frames={1} (bake once) is still correct because nothing in this
           local space ever moves. */}
-      <ContactShadows position={[0, 0, 0]} opacity={0.35} scale={8} blur={1.5} far={1.2} frames={1} />
+      {/* Mounted only once the car is revealed: it bakes one frame, and a
+          bake taken while the car was hidden for compiling would be empty. */}
+      {revealed && <ContactShadows position={[0, 0, 0]} opacity={0.35} scale={8} blur={1.5} far={1.2} frames={1} />}
       <group ref={dynamicsRef}>
         <group ref={modelRef}>
           <PorscheModel url={MODEL_PATH} />
+          {loadInterior && (
+            <Suspense fallback={null}>
+              <Interior onDoor={addDoor} />
+            </Suspense>
+          )}
           {!IS_MOBILE && <InfotainmentScreen />}
           <pointLight ref={cabinLightRef} position={[0.1, 1.05, 0]} intensity={0} distance={2.6} decay={1.4} color="#ffe8d2" />
         </group>
       </group>
+    </group>
+  )
+}
+
+// The cabin: the interior half of the split model, overlaid on the exterior
+// in the same group (both carry the full node hierarchy, so it lines up
+// exactly). Same reveal as the exterior — hidden on a non-rendered layer
+// while its shaders compile in the background, then faded in — so neither
+// the download nor the compile ever stalls the drive.
+function Interior({ onDoor }: { onDoor: (door: THREE.Object3D) => void }) {
+  const { materials } = useGLTF(INTERIOR_PATH)
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  const camera = useThree((s) => s.camera)
+  const groupRef = useRef<THREE.Group>(null)
+  const fade = useRef(-1) // -1 until compiled, then 0 -> 1
+
+  useLayoutEffect(() => {
+    const group = groupRef.current
+    if (!group) return
+    const all = Object.values(materials) as THREE.Material[]
+    for (const m of all) {
+      m.userData.__preFadeTransparent = m.transparent
+      m.userData.__preFadeOpacity = m.opacity
+      m.transparent = true
+      m.opacity = 0
+    }
+    const meshes: THREE.Object3D[] = []
+    group.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh) return
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      const material = mesh.material as THREE.MeshStandardMaterial
+      if (material) material.envMapIntensity = CAR_ENV_MAP_INTENSITY
+      mesh.layers.set(1)
+      meshes.push(mesh)
+    })
+    const door = group.getObjectByName('door_2')
+    if (door) onDoor(door)
+
+    let cancelled = false
+    const reveal = () => {
+      if (cancelled) return
+      for (const m of meshes) m.layers.set(0)
+      fade.current = 0
+    }
+    // Linear target for the same reason as the exterior's compile above.
+    const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
+    const previous = gl.getRenderTarget()
+    gl.setRenderTarget(target)
+    const compiling = gl.compileAsync(scene, camera)
+    gl.setRenderTarget(previous)
+    compiling.then(reveal, reveal).finally(() => target.dispose())
+    return () => {
+      cancelled = true
+    }
+  }, [materials, gl, scene, camera, onDoor])
+
+  useFrame((_, delta) => {
+    if (fade.current < 0 || fade.current >= 1) return
+    fade.current = Math.min(1, fade.current + delta * 1.5)
+    for (const m of Object.values(materials) as THREE.Material[]) {
+      const target = (m.userData.__preFadeOpacity as number) ?? 1
+      m.opacity = target * fade.current
+      if (fade.current >= 1) m.transparent = (m.userData.__preFadeTransparent as boolean) ?? false
+    }
+  })
+
+  return (
+    <group ref={groupRef}>
+      <PorscheModel url={INTERIOR_PATH} />
     </group>
   )
 }

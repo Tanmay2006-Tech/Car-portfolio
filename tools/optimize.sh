@@ -215,3 +215,7 @@ sed -i "/^useGLTF.preload('\/models\/porsche-desktop.glb')$/d" "$COMPONENT_OUT"
 sed -i 's/nodes\.\([A-Za-z0-9_]*\)\.geometry/nodes.\1?.geometry/g' "$COMPONENT_OUT"
 
 echo "-> $COMPONENT_OUT"
+
+# Desktop loads in two halves: the exterior first (what the landing shot
+# needs), the cabin streamed in afterwards. See tools/split-interior.mjs.
+node tools/split-interior.mjs

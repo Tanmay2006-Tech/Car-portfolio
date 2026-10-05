@@ -611,3 +611,11 @@ The owner found the pastel look too basic ("font and color is also simple... add
   - Mobile skips the real-time sun shadow pass and caps dpr at 1.5. Throttled-mobile (4× CPU) drive went from ~16fps to ~46fps.
   - The column pane's `backdrop-filter` blur over the live canvas cost 8–12fps on desktop (A/B measured); replaced with a 0.9 tint.
 - Caveat for measurements: the repo lives inside OneDrive, whose sync process is the heaviest thing on the dev machine during builds and captures, so absolute fps numbers swing run to run. Compare A/B pairs run back to back, not numbers across sessions.
+
+**2026-10-05 — First-load speed: the car appeared ~6s after opening the site.**
+
+Measured with `tools/measure-load.mjs` (cold cache, throttled connection) and `tools/profile-load.mjs` (CPU profile from navigation to the car on screen). At 20 Mbps the GLB finished downloading at 2.5s but the car only appeared at 6.0s — the gap was shader compilation (73% of load CPU time), not the download.
+
+- **Shaders compiled for the wrong target.** `Car.tsx` now hides the car's meshes on layer 1 and calls `gl.compileAsync` against a linear HalfFloat render target before revealing them. The target matters: frames are drawn into EffectComposer's buffer, and three keys programs on output colour space and tone mapping, so compiling for the canvas built ~40 programs nobody used (cache keys differed only in `srgb` vs `srgb-linear`) and the real ones still compiled, blocking, on the first frame. Programs went 86 → 55. `gl.debug.checkShaderErrors` is off in production (it forces a blocking info-log read per program). ContactShadows mounts only after the reveal, since it bakes one frame.
+- **Split model.** `tools/split-interior.mjs` (now the last step of `optimize.sh`) writes `porsche-exterior.glb` (2.64MB) and `porsche-interior.glb` (2.48MB) from the desktop GLB, both keeping the full node hierarchy so `Porsche.tsx` renders either. Desktop loads the exterior first; the cabin streams in 0.8s after the car is revealed, compiles the same way, fades in, and registers its own `door_2` so both halves of the driver's door swing together. Mobile still uses `porsche-mobile.glb`.
+- Result at 20 Mbps: car on screen 6.0s → 3.5s (exterior download 1.5s). At 8 Mbps: 4.9s. Drive fps unchanged (51–56fps through the legs on the dev machine).

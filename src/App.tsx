@@ -139,6 +139,10 @@ function Scene({ onContextLost }: { onContextLost: () => void }) {
               'renderer.outputColorSpace must be SRGBColorSpace or colours display wrong.',
             )
             camera.lookAt(...HERO_CAMERA_LOOKAT)
+            // three.js reads back every shader's info log after linking to
+            // report errors, which forces a blocking wait per program. Only
+            // worth it while developing.
+            gl.debug.checkShaderErrors = DEBUG || import.meta.env.DEV
             gl.domElement.addEventListener('webglcontextlost', (event) => {
               event.preventDefault()
               onContextLost()

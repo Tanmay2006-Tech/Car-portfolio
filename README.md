@@ -53,6 +53,9 @@ All copy lives in `src/content.ts`.
 | `node tools/check-fast-scroll.mjs [url]` | Screenshots mid-flick through leg 1: the car must stay in frame |
 | `node tools/profile-drive.mjs [url] [--mobile] [--cpu=4] [--source=dist/assets/index-*.js]` | CPU profile of a drive, top functions by self time |
 | `node tools/capture-og.mjs [url]` | Renders the 1200×630 social-share image source |
+| `node tools/measure-load.mjs [url] [--mbps=20] [--mobile]` | Cold-cache load timeline on a throttled connection: when text paints, when the car appears |
+| `node tools/profile-load.mjs [url] [--source=…]` | CPU profile of the load, top functions by self time |
+| `node tools/split-interior.mjs` | Splits the desktop GLB into exterior (loads first) and interior (streams later); run by `optimize.sh` |
 | `node tools/prepare-model.mjs && bash tools/optimize.sh` | Rebuild both GLBs and the typed model component from `raw/` |
 
 ## Deploy
