@@ -195,8 +195,17 @@ function Projects({ layout }: { layout: Layout }) {
   )
 }
 
+// One cached formatter per precision: toLocaleString builds a new one on
+// every call, and this runs every frame — profiled at ~6% of frame time on
+// a throttled phone before caching.
+const FORMATTERS = new Map<number, Intl.NumberFormat>()
 function formatStat(value: number, decimals: number) {
-  return value.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+  let f = FORMATTERS.get(decimals)
+  if (!f) {
+    f = new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    FORMATTERS.set(decimals, f)
+  }
+  return f.format(value)
 }
 
 function Telemetry({ layout }: { layout: Layout }) {
@@ -205,8 +214,13 @@ function Telemetry({ layout }: { layout: Layout }) {
 
   // Counts up as the car enters the leg, reversibly — a pure function of
   // route progress. Archivo's tabular figures keep the width steady.
+  const lastK = useRef(-1)
   useRaf(() => {
     const k = Math.min(1, Math.max(0, (scroll.routeP - LEG_START[2] + 0.004) / 0.03))
+    // Nothing to do unless the count actually moved (it's settled at 0 or
+    // 1 for nearly the whole drive).
+    if (k === lastK.current) return
+    lastK.current = k
     const eased = 1 - Math.pow(1 - k, 3)
     TELEMETRY.forEach((stat, i) => {
       const el = valueRefs.current[i]

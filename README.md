@@ -1,6 +1,6 @@
 # Cold Start
 
-3D portfolio for Tanmay Tripathi. A dawn test drive: the car starts cold, pulls away, runs a route past the work, and parks — then the camera gets in.
+3D portfolio for Tanmay Tripathi. A sunrise test drive: the car starts cold, pulls away, runs a route past the work, and parks — then the camera gets in.
 
 Built with Vite, React 18, TypeScript, React Three Fiber, GSAP ScrollTrigger and Lenis. The full design brief is in `CLAUDE.md`.
 
@@ -49,6 +49,10 @@ All copy lives in `src/content.ts`.
 | `node tools/measure-drive.mjs [url] [--mobile] [--cpu=4]` | fps per leg and LCP while scrolling the whole route |
 | `node tools/check-focus.mjs [url]` | Tab through the page and confirm every focus stop is on screen |
 | `node tools/measure-speed.mjs [url?debug]` | Cruise speed, roll and braking calibration |
+| `node tools/check-overflow.mjs [url]` | Every leg's text column fits the viewport at 1280×720 → 1920×1080 |
+| `node tools/check-fast-scroll.mjs [url]` | Screenshots mid-flick through leg 1: the car must stay in frame |
+| `node tools/profile-drive.mjs [url] [--mobile] [--cpu=4] [--source=dist/assets/index-*.js]` | CPU profile of a drive, top functions by self time |
+| `node tools/capture-og.mjs [url]` | Renders the 1200×630 social-share image source |
 | `node tools/prepare-model.mjs && bash tools/optimize.sh` | Rebuild both GLBs and the typed model component from `raw/` |
 
 ## Deploy

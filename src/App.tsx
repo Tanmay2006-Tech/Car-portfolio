@@ -1,7 +1,7 @@
 import { Suspense, lazy, useState } from 'react'
 import * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
-import { AdaptiveDpr, Environment, Preload, Stats } from '@react-three/drei'
+import { AdaptiveDpr, Preload, Stats } from '@react-three/drei'
 import { EffectComposer, SMAA, ToneMapping } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
 
@@ -13,6 +13,7 @@ import { QualityMonitor } from './scene/QualityMonitor'
 import { useQuality } from './scene/quality'
 import { srgb, DAWN_LOW } from './scene/colors'
 import { Sky } from './scene/Sky'
+import { SunriseEnvironment } from './scene/SunriseEnvironment'
 import { DawnCycle } from './scene/DawnCycle'
 import { Ground } from './scene/Ground'
 import { RoadRibbon } from './scene/RoadRibbon'
@@ -32,7 +33,7 @@ import { TelemetryGauge } from './sections/TelemetryGauge'
 import { Footer } from './sections/Footer'
 import { ColumnPane } from './sections/ColumnPane'
 import { TopNav } from './sections/TopNav'
-import { DRIVING, HAS_WEBGL, DEBUG } from './env'
+import { DRIVING, HAS_WEBGL, DEBUG, IS_MOBILE } from './env'
 
 // Leg 4's heat-map shader (CLAUDE.md section 6: "Lazy-load the GridSense
 // heat-map shader — not needed until leg 4"). Its own chunk, fetched once
@@ -42,10 +43,6 @@ const RiskLayer = lazy(() => import('./scene/RiskLayer'))
 // A still of the parked car at the hero angle, for browsers without WebGL
 // (CLAUDE.md section 7) — and for a context lost mid-session.
 const STATIC_HERO_IMAGE = `${import.meta.env.BASE_URL}hero-static.jpg`
-// Self-hosted copy of drei's "sunset" preset (venice_sunset_1k.hdr) — the
-// preset itself fetches from a third-party CDN at runtime, which is one
-// more thing that can fail or be blocked on the live site.
-const HDRI = `${import.meta.env.BASE_URL}hdri/venice_sunset_1k.hdr`
 
 // Confirmed: THREE.ColorManagement.enabled defaults true (three@0.186.0),
 // and nothing in this codebase sets it false. Asserted here rather than
@@ -127,9 +124,13 @@ function Scene({ onContextLost }: { onContextLost: () => void }) {
           it. Living outside the scrolling flow from the start means the
           canvas never has to move when that lands. */}
       <div className="stage">
+        {/* Phones skip the real-time sun shadow pass (a second full draw of
+            the car every frame — the contact shadow under the car stays)
+            and cap density at 1.5x, where 2x costs ~78% more pixels for
+            detail a phone screen at arm's length doesn't show. */}
         <Canvas
-          shadows="soft"
-          dpr={[1, 2]}
+          shadows={IS_MOBILE ? false : 'soft'}
+          dpr={IS_MOBILE ? [1, 1.5] : [1, 2]}
           camera={{ position: HERO_CAMERA_POSITION, fov: HERO.fov }}
           gl={{ antialias: false }}
           onCreated={({ gl, scene, camera }) => {
@@ -166,15 +167,9 @@ function Scene({ onContextLost }: { onContextLost: () => void }) {
               keeps it framed around wherever the car currently is. */}
           <SunRig />
 
-          {/* preset="dawn" (kiara_1_dawn_1k.hdr) was the original choice, but
-              its own colour cast is cool/blue, which showed up directly in the
-              ground: verge rendered blue-dominant (B>G>R) against a token that's
-              supposed to be green-dominant (G>B>R) — a structurally wrong hue,
-              not just under-saturated, and no tone-mapping curve fixes a wrong
-              hue. preset="sunset" (venice_sunset_1k.hdr) is warm and puts the
-              rendered ground back in the token's own channel order. Verified by
-              sampling real pixels under both, ACES held fixed throughout. */}
-          <Environment files={HDRI} environmentIntensity={0.35} />
+          {/* Reflections and ambient fill, generated from the scene's own
+              sunrise (no HDRI download) — see SunriseEnvironment.tsx. */}
+          <SunriseEnvironment />
 
           <Suspense fallback={null}>
             <Car />
@@ -264,7 +259,7 @@ function StaticApp({ webgl }: { webgl: boolean }) {
         <HeroOverlay mode="flow" />
         <Sections layout="static" />
       </div>
-      <Footer />
+      <Footer layout="static" />
     </>
   )
 }
@@ -301,7 +296,7 @@ function DriveApp() {
       <main id="page" style={{ height: `calc(${PAGE_HEIGHT_PX}px + 100vh)` }}>
         <Sections layout="drive" />
       </main>
-      <Footer />
+      <Footer layout="drive" />
     </>
   )
 }

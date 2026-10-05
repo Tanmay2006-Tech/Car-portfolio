@@ -8,7 +8,7 @@ import type { Shot } from './cameraShots'
 import { carPose } from './carPose'
 import { telemetry } from './telemetry'
 import { scroll } from './scrollState'
-import { IS_MOBILE } from '../env'
+import { IS_MOBILE, REDUCED_MOTION } from '../env'
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -81,6 +81,18 @@ export function ChaseCamera() {
       // CHASE — the route's own progress-0 keyframe — by the time it ends.
       const t = scroll.phase === 'coldstart' ? THREE.MathUtils.smootherstep(scroll.phaseProgress, 0, 1) : 0
       s = lerpShot(HERO, CHASE, t, shot.current)
+
+      // Idle drift on the parked shot: a few degrees of slow orbit and a
+      // breath of height, so the landing page is alive before anyone
+      // scrolls. Fades out over the first third of cold start, so the
+      // HERO -> CHASE swing takes over without a seam. Off for reduced
+      // motion.
+      if (!REDUCED_MOTION) {
+        const weight = scroll.phase === 'hero' ? 1 : 1 - THREE.MathUtils.smootherstep(scroll.phaseProgress, 0, 0.3)
+        const clock = state.clock.elapsedTime
+        s.azimuthDeg += Math.sin(clock * 0.16) * 6 * weight
+        s.height += Math.sin(clock * 0.11 + 1.3) * 0.08 * weight
+      }
     }
 
     // Orientation frame lags the car's heading (see CAMERA_YAW_LAMBDA).

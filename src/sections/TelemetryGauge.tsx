@@ -25,6 +25,9 @@ function arcPath(fromDeg: number, toDeg: number, r: number) {
   return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`
 }
 
+// Cached: building a formatter per frame showed up in profiles.
+const RPM_FORMAT = new Intl.NumberFormat('en-US')
+
 const TICKS = Array.from({ length: 9 }, (_, i) => -SWEEP_DEG / 2 + (i * SWEEP_DEG) / 8)
 
 export function TelemetryGauge() {
@@ -42,13 +45,18 @@ export function TelemetryGauge() {
         let opacity = 0
         if (scroll.phase === 'coldstart') opacity = Math.min(1, Math.max(0, (scroll.phaseProgress - 0.02) / 0.08))
         else if (scroll.phase === 'route') opacity = Math.min(1, Math.max(0, (DOOR_OPEN_START - scroll.routeP) / 0.01))
+        if (scroll.progress >= 0.999) opacity = 0
         root.style.opacity = opacity.toFixed(3)
         root.style.visibility = opacity > 0.001 ? 'visible' : 'hidden'
       }
       const deg = -SWEEP_DEG / 2 + (Math.min(telemetry.rpm, MAX_RPM) / MAX_RPM) * SWEEP_DEG
       needleRef.current?.setAttribute('transform', `rotate(${deg.toFixed(2)} 50 54)`)
-      if (speedRef.current) speedRef.current.textContent = String(Math.round(scroll.phase === 'route' ? telemetry.speedSmoothKmh : 0))
-      if (rpmRef.current) rpmRef.current.textContent = (Math.round(telemetry.rpm / 10) * 10).toLocaleString('en-US')
+      // Text only changes when the shown value does — no per-frame DOM
+      // writes while cruising.
+      const speedText = String(Math.round(scroll.phase === 'route' ? telemetry.speedSmoothKmh : 0))
+      if (speedRef.current && speedRef.current.textContent !== speedText) speedRef.current.textContent = speedText
+      const rpmText = RPM_FORMAT.format(Math.round(telemetry.rpm / 10) * 10)
+      if (rpmRef.current && rpmRef.current.textContent !== rpmText) rpmRef.current.textContent = rpmText
       id = requestAnimationFrame(tick)
     })
     return () => cancelAnimationFrame(id)

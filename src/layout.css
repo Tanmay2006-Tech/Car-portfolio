@@ -124,6 +124,12 @@ p {
   /* A scrim, not decoration: keeps the bar legible over a bright sky. */
   background: linear-gradient(to bottom, rgba(14, 18, 48, 0.66), rgba(14, 18, 48, 0));
 }
+.topnav[data-solid] {
+  background: rgba(14, 18, 48, 0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
 .topnav a {
   border-bottom-color: transparent;
 }
@@ -145,6 +151,7 @@ p {
   color: var(--text);
 }
 .topnav__links {
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: 26px;
@@ -259,6 +266,61 @@ p {
   background: var(--line);
   overflow: hidden;
 }
+/* Page-load entrance, the hero only: the two lines of the name rise out
+   of their own baseline, then the rest of the copy follows. One sequence,
+   once; the global reduced-motion rule in index.css collapses it. */
+.hero--fixed .hero__name span {
+  display: block;
+  animation: name-rise 1s cubic-bezier(0.16, 0.8, 0.2, 1) both;
+}
+.hero--fixed .hero__name span:nth-child(2) {
+  animation-delay: 0.09s;
+}
+.hero--fixed .hero__role,
+.hero--fixed .hero__summary,
+.hero--fixed .hero__credential,
+.hero--fixed .hero__actions,
+.hero--fixed .hero__hint {
+  animation: copy-in 0.8s ease-out both;
+}
+.hero--fixed .hero__role {
+  animation-delay: 0.05s;
+}
+.hero--fixed .hero__summary {
+  animation-delay: 0.35s;
+}
+.hero--fixed .hero__credential {
+  animation-delay: 0.45s;
+}
+.hero--fixed .hero__actions {
+  animation-delay: 0.55s;
+}
+.hero--fixed .hero__hint {
+  animation-delay: 0.9s;
+}
+@keyframes name-rise {
+  from {
+    clip-path: inset(-30% -10% 100% -10%);
+    transform: translateY(0.35em);
+  }
+  /* Negative insets at rest so descenders (y, p) and the wide caps are
+     never clipped once the line has landed. */
+  to {
+    clip-path: inset(-30% -10% -40% -10%);
+    transform: none;
+  }
+}
+@keyframes copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* The one ambient motion on the page: a slow sweep along the hint. */
 .hero__hint-line::after {
   content: '';
@@ -619,9 +681,7 @@ p {
 .contact {
   pointer-events: auto;
   width: min(460px, calc(100vw - 2 * var(--gutter)));
-  background: rgba(14, 18, 48, 0.82);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  background: rgba(14, 18, 48, 0.9);
   border: 1px solid var(--line);
   border-radius: 2px;
   padding: 22px 26px;
@@ -819,9 +879,10 @@ p {
   left: 0;
   width: var(--column);
   z-index: 1;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
-  backdrop-filter: blur(18px) saturate(1.2);
+  /* Tinted, not blurred: a backdrop blur over a live WebGL canvas
+     re-blurs a third of the screen every frame — measured at 8-12fps on
+     desktop — for a difference a dark pane barely shows. */
+  background: rgba(16, 20, 50, 0.9);
   border-right: 1px solid var(--line);
   pointer-events: none;
 }
@@ -829,16 +890,85 @@ p {
 /* Small model-load readout, not a splash screen */
 .loader {
   position: fixed;
-  bottom: 16px;
-  right: 16px;
-  z-index: 5;
+  right: var(--gutter);
+  bottom: 32px;
+  z-index: 6;
+  width: 200px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
   font-size: 13px;
+  color: var(--text-muted);
   pointer-events: none;
+}
+.loader__value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.loader__bar {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--line);
+  overflow: hidden;
+}
+.loader__bar span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transform-origin: left;
+  transition: transform 0.25s ease-out;
+}
+@media (max-width: 768px) {
+  .loader {
+    top: calc(45vh - 56px);
+    bottom: auto;
+  }
+}
+
+/* Skip link: off screen until focused. */
+.skip {
+  position: absolute;
+  left: var(--gutter);
+  top: 10px;
+  z-index: 20;
+  padding: 10px 16px;
+  background: var(--text);
+  color: var(--night);
+  border: 0;
+  transform: translateY(-160%);
+}
+.skip:focus-visible {
+  transform: none;
+  color: var(--night);
 }
 
 /* ---------------------------------------------------------------------
    Footer
    --------------------------------------------------------------------- */
+.footer__close {
+  max-width: 1180px;
+  padding: 80px var(--gutter) 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.footer__line {
+  font-family: var(--font-display);
+  font-stretch: 125%;
+  font-weight: 700;
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  line-height: 1.12;
+  max-width: 26ch;
+  text-wrap: balance;
+}
+.footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.footer__actions a {
+  border-bottom-width: 1px;
+}
 .footer {
   position: relative;
   z-index: 3;

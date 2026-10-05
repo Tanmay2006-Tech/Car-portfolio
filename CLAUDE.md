@@ -599,3 +599,15 @@ The owner found the pastel look too basic ("font and color is also simple... add
 - **Scene** (`DawnCycle.tsx`, `Sky.tsx`, `colors.ts`, `Scenery.tsx`): indigo sky with a violet band, apricot horizon and fading stars, warming to gold and early-morning blue over the drive; deep teal fields, slate road (`ASPHALT #3D3C4C`, `VERGE #36544F`), dusk-toned trees/buildings, low violet hills far back.
 - **Layout**: fixed top bar (`TopNav.tsx`) with name, live leg/trip/clock, jump links that snap the car (`carPose.snap`) and a Resume button; a rebuilt hero with a huge two-line wide name, one credential line for the published paper, and "See the work" / "Resume" buttons; every leg on a dark frosted column with gold figures.
 - Re-checked: no column overflow 1280×720–1920×1080, every focus stop on screen, mobile, ~50fps through the legs on the dev machine (unchanged from before the redesign). `public/hero-static.jpg` regenerated in the new look.
+
+**2026-10-05 — Full-control polish and performance pass.**
+
+- **Reflections**: the downloaded Venice HDRI is gone. `SunriseEnvironment.tsx` renders a 256px cube map once from the scene's own sunrise — indigo/violet/apricot dome, a hot strip at the sun's azimuth, a broad warm fill opposite it, a horizon belt, a cool overhead softbox and two long side strips (the flank streaks of car photography). Car `envMapIntensity` raised to 1.35/0.35 to suit it. A hero-only warm fill light (`SunRig.tsx`) lights the nose in the landing shot and fades out over the first half of cold start.
+- **Landing**: slow idle camera drift on the parked shot (off under reduced motion), and one page-load sequence — the two name lines rise in, then the copy.
+- **Polish**: loader restyled for the dark design (it was invisible), skip link, "Drive it again" closing block in the footer, top bar turns solid over the footer and always in the static layout, gauge/map/pane never over the footer, `public/og.jpg` share image (`tools/capture-og.mjs`), `vercel.json` with immutable caching for hashed assets, a week for models, and security headers.
+- **Performance, found by profiling (`tools/profile-drive.mjs`) rather than guessing**:
+  - `toLocaleString` per frame in the telemetry count-up and the gauge was the top app hot spot (~6% of frame time on a throttled phone). Cached `Intl.NumberFormat`s and write-only-on-change.
+  - DawnCycle wrote a CSS variable on `<html>` every frame (whole-document style recalc) for a value the redesign no longer used — removed.
+  - Mobile skips the real-time sun shadow pass and caps dpr at 1.5. Throttled-mobile (4× CPU) drive went from ~16fps to ~46fps.
+  - The column pane's `backdrop-filter` blur over the live canvas cost 8–12fps on desktop (A/B measured); replaced with a 0.9 tint.
+- Caveat for measurements: the repo lives inside OneDrive, whose sync process is the heaviest thing on the dev machine during builds and captures, so absolute fps numbers swing run to run. Compare A/B pairs run back to back, not numbers across sessions.

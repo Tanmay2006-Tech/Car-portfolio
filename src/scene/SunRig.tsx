@@ -4,6 +4,8 @@ import * as THREE from 'three'
 
 import { carPose } from './carPose'
 import { dawn } from './DawnCycle'
+import { scroll } from './scrollState'
+import { HERO } from './cameraShots'
 
 // Low sun (CLAUDE.md section 2's "dawn, not candy" — low sun, long raking
 // shadows). Elevation is measured from the horizon; distance only affects
@@ -22,6 +24,15 @@ const azimuthRad = THREE.MathUtils.degToRad(SUN_AZIMUTH_DEG)
 // origin (PROMPTS.md: "the shadow camera was framed to the car's footprint
 // back when the car was static — now it travels 952m").
 const SUN_OFFSET = new THREE.Vector3()
+
+// Hero fill: the parked car faces the camera with the sun behind it, so its
+// nose would sit in shadow on the most important frame of the site. A soft,
+// shadowless warm fill from just above the camera's side lights it the way
+// a photographer would, then fades out across the first half of cold start
+// so the drive keeps its sunrise backlight.
+const HERO_FILL_INTENSITY = 1.7
+const heroAz = THREE.MathUtils.degToRad(HERO.azimuthDeg)
+const HERO_FILL_OFFSET = new THREE.Vector3(-Math.cos(heroAz) * 6, 3.2, Math.sin(heroAz) * 6 + 2.5)
 
 // Renders the key light plus its shadow target, and re-centres both on the
 // car every frame. Must mount AFTER <Car/> (same rule as ChaseCamera) so it
@@ -47,6 +58,7 @@ export function SunRig() {
   // it never requires the target to be part of the rendered tree, only
   // that its matrixWorld is fresh by the time that read happens.
   const target = useRef(new THREE.Object3D()).current
+  const fillRef = useRef<THREE.DirectionalLight>(null)
 
   useFrame(() => {
     const light = lightRef.current
@@ -62,6 +74,13 @@ export function SunRig() {
     light.position.copy(carPose.position).add(SUN_OFFSET)
     light.color.copy(dawn.sunColor)
     light.intensity = dawn.sunIntensity
+
+    const fill = fillRef.current
+    if (fill) {
+      const k = scroll.phase === 'hero' ? 1 : scroll.phase === 'coldstart' ? 1 - THREE.MathUtils.smootherstep(scroll.phaseProgress, 0, 0.5) : 0
+      fill.intensity = HERO_FILL_INTENSITY * k
+      fill.position.copy(carPose.position).add(HERO_FILL_OFFSET)
+    }
   })
 
   return (
@@ -101,6 +120,7 @@ export function SunRig() {
         shadow-bias={-0.0005}
         target={target}
       />
+      <directionalLight ref={fillRef} color="#ffd2ac" intensity={HERO_FILL_INTENSITY} target={target} />
     </>
   )
 }

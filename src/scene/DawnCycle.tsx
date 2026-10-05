@@ -45,8 +45,6 @@ export const dawn = {
   sunColor: srgb(KEYS[0].sun),
   sunIntensity: KEYS[0].intensity,
   sunElevationDeg: KEYS[0].elevationDeg,
-  // sRGB hex of the horizon, for the DOM.
-  horizonCss: KEYS[0].horizon,
 }
 
 function sample(t: number) {
@@ -72,10 +70,6 @@ function timeOfDay(): number {
   return 0.12 + 0.88 * carPose.routeP
 }
 
-const scratch = new THREE.Color()
-
-let lastCss = ''
-
 export function DawnCycle() {
   const scene = useThree((state) => state.scene)
 
@@ -85,14 +79,6 @@ export function DawnCycle() {
     sample(dawn.t)
     if (scene.fog) (scene.fog as THREE.Fog).color.copy(dawn.horizon)
 
-    // The DOM column pane takes the horizon tint too. Only touch the style
-    // when the visible value actually changes.
-    const css = '#' + scratch.copy(dawn.horizon).getHexString(THREE.SRGBColorSpace)
-    if (css !== lastCss) {
-      lastCss = css
-      dawn.horizonCss = css
-      document.documentElement.style.setProperty('--sky-horizon', css)
-    }
   })
   return null
 }

@@ -49,6 +49,9 @@ export function ColumnPane() {
         let opacity = 0
         if (scroll.phase === 'coldstart') opacity = Math.min(1, Math.max(0, (scroll.phaseProgress - 0.55) / 0.35))
         else if (scroll.phase === 'route') opacity = Math.min(1, Math.max(0, (DOOR_OPEN_START + 0.006 - carPose.routeP) / 0.008))
+        // Never over the footer, even while the car is still catching up
+        // with a scrollbar drag to the bottom.
+        if (scroll.progress >= 0.999) opacity = 0
         el.style.opacity = opacity.toFixed(3)
         el.style.visibility = opacity > 0.001 ? 'visible' : 'hidden'
         // The map sits with the gauge, outside the pane (a backdrop-filter

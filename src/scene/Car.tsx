@@ -97,7 +97,10 @@ const BRAKE_DECEL_DEADZONE = 6
 // envMapIntensity here to the exact reciprocal cancels that scene-wide
 // dim for the car ONLY — Ground.tsx never touches envMapIntensity, so the
 // ground stays at the protected 0.35 while the car reads at full strength.
-const CAR_ENV_MAP_INTENSITY = 1 / 0.35
+// x1.35 on top: the generated sunrise environment (SunriseEnvironment.tsx)
+// is darker overall than the photo it replaced, and the paint needs its
+// reflections to read as lacquer.
+const CAR_ENV_MAP_INTENSITY = 1.35 / 0.35
 const BODY_CLEARCOAT = 1
 const BODY_CLEARCOAT_ROUGHNESS = 0.05
 // Car.tsx section 1's opening (CLAUDE.md): phase A/B are parked, engine and

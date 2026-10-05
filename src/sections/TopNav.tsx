@@ -45,12 +45,16 @@ const LINKS: { label: string; id: string; routeP: number; sections: number[] }[]
 export function TopNav({ layout }: { layout: 'drive' | 'static' }) {
   const section = useSection((s) => s.section)
   const instrumentsRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLElement>(null)
   const kmRef = useRef<HTMLSpanElement>(null)
   const clockRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
     if (layout !== 'drive') return
     let id = requestAnimationFrame(function tick() {
+      // Past the end of the drive the page scrolls the footer up under
+      // the bar, so the bar takes a solid ground there.
+      barRef.current?.toggleAttribute('data-solid', scroll.progress >= 0.999)
       const el = instrumentsRef.current
       if (el) {
         // Instruments come on with the engine (cold start) and stay on.
@@ -72,7 +76,14 @@ export function TopNav({ layout }: { layout: 'drive' | 'static' }) {
   }
 
   return (
-    <header className="topnav">
+    // The static layout scrolls content under the bar from the first pixel,
+    // so it's always solid there.
+    <header ref={barRef} className="topnav" data-solid={layout === 'static' ? '' : undefined}>
+      {/* First stop for keyboard users: straight to the work, past the
+          opening animation. */}
+      <a className="skip" href="#projects" onClick={(e) => jump(e, LINKS[0].routeP)}>
+        Skip to the work
+      </a>
       <a className="topnav__name" href="#top" onClick={(e) => jump(e, 0)}>
         {PERSON.name}
       </a>
