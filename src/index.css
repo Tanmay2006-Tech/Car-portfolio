@@ -1,17 +1,25 @@
 :root {
-  /* Dawn palette — CLAUDE.md section 2. The world is pastel, the car is
-     saturated; --guards (Guards Red) is rationed to car paint + one CTA. */
-  --dawn-high: #a9bfd6;
-  --dawn-low: #f7dcc2;
-  --asphalt: #cdc7ce;
-  --verge: #b7d3bf;
-  --ink: #2b2733;
-  --guards: #d0111b;
+  /* Sunrise over the test track. The scene is the minute before the sun
+     comes up — indigo sky, a violet band, an apricot horizon — and the
+     Guards Red car is the one saturated object in it. Text is ivory on
+     dark glass; gold marks the numbers that matter. */
+  --night: #141a3c;
+  --night-deep: #0e1230;
+  --violet: #5b3f7e;
+  --glow: #f49a5e;
+  --gold: #f2b65e;
+  --text: #f3ece2;
+  --text-muted: rgba(243, 236, 226, 0.74);
+  --line: rgba(243, 236, 226, 0.24);
+  --line-strong: rgba(243, 236, 226, 0.55);
+  --glass: rgba(16, 20, 50, 0.62);
+  --guards: #d0111b; /* car paint and the one CTA */
+  --ink: #2b2733; /* dark text on ivory surfaces (signs, inputs) */
 
-  --font-display: 'Jost Variable', system-ui, sans-serif;
-  --font-body: 'Archivo Variable', system-ui, sans-serif;
+  --font-display: 'Archivo Variable', 'Arial Narrow', system-ui, sans-serif;
+  --font-body: 'Instrument Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 * {
@@ -26,13 +34,12 @@ body,
 }
 
 body {
-  background: var(--dawn-low);
-  color: var(--ink);
+  background: var(--night);
+  color: var(--text);
   font-family: var(--font-body);
   font-size: 17px;
   line-height: 1.55;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1,
@@ -43,7 +50,18 @@ h4 {
   margin: 0;
 }
 
+/* Gold, not red: a Guards Red ring is too dark to see on the night sky. */
 :focus-visible {
-  outline: 2px solid var(--guards);
-  outline-offset: 2px;
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

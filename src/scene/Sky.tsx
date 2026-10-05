@@ -34,8 +34,10 @@ const vertexShader = /* glsl */ `
 // either chunk regardless of that flag's value.)
 const fragmentShader = /* glsl */ `
   uniform vec3 topColor;
+  uniform vec3 midColor;
   uniform vec3 bottomColor;
   uniform vec3 sunColor;
+  uniform float stars;
   uniform vec3 sunDir;
   uniform float offset;
   uniform float exponent;
@@ -43,11 +45,24 @@ const fragmentShader = /* glsl */ `
   void main() {
     vec3 dir = normalize(vWorldPosition + vec3(0.0, offset, 0.0));
     float h = dir.y;
-    vec3 sky = mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0));
+    // Three bands: apricot horizon, a violet belt, indigo overhead.
+    float hh = max(h, 0.0);
+    vec3 sky = mix(bottomColor, midColor, smoothstep(0.0, 0.16, hh));
+    sky = mix(sky, topColor, smoothstep(0.1, 0.62, hh));
+    // The last stars, fading as the sun comes up. Hashed on a direction
+    // grid, so they hold still as the camera moves.
+    vec3 sd = normalize(vWorldPosition);
+    vec2 g = vec2(atan(sd.z, sd.x), asin(sd.y)) * 380.0;
+    vec2 cell = floor(g);
+    float rnd = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+    // A small round point inside the cell, not the whole cell.
+    float dotShape = smoothstep(0.22, 0.04, length(fract(g) - 0.5));
+    float star = step(0.996, rnd) * dotShape * smoothstep(0.2, 0.55, hh) * stars;
+    sky += vec3(star * (0.55 + 0.45 * fract(rnd * 97.0)));
     // Low sun: a soft disc and a wide warm glow along the horizon on its
     // side of the sky. Pale, not bright — the sky stays pastel.
     float d = max(dot(normalize(vWorldPosition), sunDir), 0.0);
-    sky = mix(sky, sunColor, pow(d, 6.0) * 0.45);
+    sky = mix(sky, sunColor, pow(d, 5.0) * 0.55);
     sky = mix(sky, vec3(1.0, 0.97, 0.92), smoothstep(0.9993, 0.9997, d) * 0.85);
     gl_FragColor = vec4(sky, 1.0);
     #include <colorspace_fragment>
@@ -60,6 +75,8 @@ export function Sky() {
   const uniforms = useMemo(
     () => ({
       topColor: { value: dawn.top },
+      midColor: { value: dawn.mid },
+      stars: { value: dawn.stars },
       bottomColor: { value: dawn.horizon },
       sunColor: { value: dawn.sunColor },
       sunDir: { value: new THREE.Vector3() },
@@ -69,6 +86,7 @@ export function Sky() {
     [],
   )
   useFrame(() => {
+    uniforms.stars.value = dawn.stars
     const el = THREE.MathUtils.degToRad(dawn.sunElevationDeg)
     const az = THREE.MathUtils.degToRad(SUN_AZIMUTH_DEG)
     uniforms.sunDir.value.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el))

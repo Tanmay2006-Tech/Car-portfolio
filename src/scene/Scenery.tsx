@@ -23,7 +23,7 @@ import { IS_MOBILE } from '../env'
 //             squared to it, like a town seen from a bypass
 //   hills     soft, low domes on the horizon that the fog swallows
 //
-// Every colour is a pastel tint; nothing competes with the car or leg 4.
+// Nothing here is saturated; the car and leg 4's risk layer stay the loudest things.
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -61,10 +61,13 @@ const SIGNS = [
 ]
 const nearSign = (d: number, side: number) => side > 0 && SIGNS.some((s) => Math.abs(s - d) < 11)
 
-const CROWN_TINTS = ['#a9c8b1', '#9ec0a9', '#bfd5bb', '#b4cfc4', '#e6c9d2', '#c9d9b8']
-const BLOCK_TINTS = ['#e8d9d3', '#d9dfe8', '#efe1cf', '#d5e2d8', '#e4d6e2', '#cfdbe6', '#f1e6dc']
-const HILL_TINTS = ['#b9cfc3', '#c3d3cd', '#b2c8c4', '#c8d6cf']
-const TRUNK = '#8e8189'
+// Dusk-side tints: deep teal and moss for the trees, mauve and slate for
+// the town, violet silhouettes for the hills. The sun's warm light picks
+// out their lit faces; nothing here is brighter than the car.
+const CROWN_TINTS = ['#2f5b57', '#3a6b5e', '#2b4f55', '#4a6e5a', '#355e4c', '#7a4e6a']
+const BLOCK_TINTS = ['#5a4e78', '#4a5677', '#6c5a7a', '#3f4c6b', '#7a6070', '#546484', '#665577']
+const HILL_TINTS = ['#2f2a52', '#3a3360', '#2a3156', '#352d5a']
+const TRUNK = '#2a2438'
 
 type Item = { position: THREE.Vector3; scale: THREE.Vector3; yaw: number; color: THREE.Color }
 
@@ -152,11 +155,11 @@ function useHills() {
       const d = (n / 18) * ROUTE_LENGTH_M + rand() * 40
       const side = n % 2 === 0 ? -1 : 1
       const { point, right } = frameAt(d)
-      const p = point.clone().addScaledVector(right, side * (150 + rand() * 120))
-      const w = 70 + rand() * 90
+      const p = point.clone().addScaledVector(right, side * (230 + rand() * 150))
+      const w = 80 + rand() * 100
       out.push({
         position: new THREE.Vector3(p.x, -2, p.z),
-        scale: new THREE.Vector3(w, 10 + rand() * 16, w * (0.6 + rand() * 0.5)),
+        scale: new THREE.Vector3(w, 7 + rand() * 9, w * (0.6 + rand() * 0.5)),
         yaw: rand() * Math.PI,
         color: srgb(HILL_TINTS[Math.floor(rand() * HILL_TINTS.length)]),
       })
@@ -204,7 +207,7 @@ function Instances({
       {/* Self-light toward white lifts the faces turned away from the low
           sun, which otherwise go a heavy grey-navy darker than anything in
           the palette — everything stays pastel from every angle. */}
-      <meshStandardMaterial roughness={roughness} emissive="#fff6ee" emissiveIntensity={emissive} />
+      <meshStandardMaterial roughness={roughness} emissive="#ffb27a" emissiveIntensity={emissive} />
     </instancedMesh>
   )
 }

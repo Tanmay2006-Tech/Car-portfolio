@@ -31,6 +31,7 @@ import { Sections } from './sections/Sections'
 import { TelemetryGauge } from './sections/TelemetryGauge'
 import { Footer } from './sections/Footer'
 import { ColumnPane } from './sections/ColumnPane'
+import { TopNav } from './sections/TopNav'
 import { DRIVING, HAS_WEBGL, DEBUG } from './env'
 
 // Leg 4's heat-map shader (CLAUDE.md section 6: "Lazy-load the GridSense
@@ -259,6 +260,7 @@ function StaticApp({ webgl }: { webgl: boolean }) {
     <>
       <div className="static-page">
         {webgl && !lost ? <Scene onContextLost={() => setLost(true)} /> : <StaticStill />}
+        <TopNav layout="static" />
         <HeroOverlay mode="flow" />
         <Sections layout="static" />
       </div>
@@ -282,6 +284,7 @@ function DriveApp() {
           render immediately regardless of GLB load state, and the loader
           is deliberately a separate element from it, not a splash screen
           gating the hero. */}
+      <TopNav layout="drive" />
       <HeroOverlay />
       <ModelLoader />
       <TelemetryGauge />

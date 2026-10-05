@@ -10,8 +10,8 @@ import * as THREE from 'three'
 export const GUARDS = '#d0111b'; // Guards Red — the car's paint, and one CTA. Nothing else.
 export const DAWN_HIGH = '#a9bfd6'; // cool pale blue — sky overhead, still holding night
 export const DAWN_LOW = '#f7dcc2'; // warm apricot — horizon, low sun
-export const ASPHALT = '#cdc7ce'; // pale warm grey — the road ribbon
-export const VERGE = '#b7d3bf'; // soft sage — roadside and ground
+export const ASPHALT = '#3d3c4c'; // slate — the road ribbon, dark so the risk layer and lane paint glow on it
+export const VERGE = '#36544f'; // deep teal field before sunrise
 export const INK = '#2b2733'; // deep plum-black — all text, never pure black
 
 export function srgb(hex: string): THREE.Color {

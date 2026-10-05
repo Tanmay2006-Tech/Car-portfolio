@@ -3,16 +3,13 @@ import * as THREE from 'three'
 
 import { carPose } from './carPose'
 import { scroll } from './scrollState'
-import { srgb, DAWN_HIGH, DAWN_LOW } from './colors'
+import { srgb } from './colors'
 
-// The drive is the sunrise. The car sat overnight (CLAUDE.md section 2:
-// "Dawn, rather than generic pastel, because the car starts cold"), so the
-// landing page opens in the last of the pre-dawn — a lilac sky over a rose
-// horizon, low weak sun — and the light comes up as the car runs the route:
-// the exact --dawn-high / --dawn-low tokens by the time the projects pass,
-// clear early morning by the time it parks. Shadows shorten as the sun
-// climbs. Every colour stays pastel; the car is still the only saturated
-// thing until leg 4's risk layer.
+// The drive is the sunrise. The car sat overnight, so the landing page
+// opens in the minute before the sun comes up — indigo sky, a violet band,
+// an apricot horizon, the last stars — and the light comes up as the car
+// runs the route: gold by the middle legs, early-morning blue by the time
+// it parks. Shadows shorten as the sun climbs.
 //
 // One mutable object, written here every frame and read by Sky, SunRig and
 // the DOM column pane — same pattern as scrollState/carPose.
@@ -20,24 +17,31 @@ import { srgb, DAWN_HIGH, DAWN_LOW } from './colors'
 interface Key {
   t: number
   top: string
+  mid: string
   horizon: string
+  stars: number
   sun: string
   intensity: number
   elevationDeg: number
 }
 
+// Night-into-sunrise: indigo overhead, a violet band, a glowing apricot
+// horizon, a few last stars. As the drive goes on the sun clears the
+// horizon and the sky warms through gold to an early-morning blue.
 const KEYS: Key[] = [
-  { t: 0, top: '#8f9cc2', horizon: '#efc6bd', sun: '#f5ad8f', intensity: 2.3, elevationDeg: 6 },
-  { t: 0.3, top: DAWN_HIGH, horizon: DAWN_LOW, sun: '#f9cfaa', intensity: 3.3, elevationDeg: 13 },
-  { t: 0.7, top: '#a3c3df', horizon: '#f8e2cb', sun: '#fbdcbc', intensity: 3.7, elevationDeg: 19 },
-  { t: 1, top: '#9fc4e4', horizon: '#f9eadb', sun: '#fde6cf', intensity: 3.9, elevationDeg: 24 },
+  { t: 0, top: '#0f1433', mid: '#4a3470', horizon: '#f08a52', stars: 1, sun: '#ff9a5c', intensity: 2.8, elevationDeg: 5 },
+  { t: 0.3, top: '#18204a', mid: '#5e3f7d', horizon: '#f59e5e', stars: 0.55, sun: '#ffac6a', intensity: 3.3, elevationDeg: 9 },
+  { t: 0.7, top: '#24356a', mid: '#8a5a84', horizon: '#f8b872', stars: 0.15, sun: '#ffc283', intensity: 3.7, elevationDeg: 15 },
+  { t: 1, top: '#34558e', mid: '#b07a86', horizon: '#fbcd8e', stars: 0, sun: '#ffd8a4', intensity: 4, elevationDeg: 22 },
 ]
-const KEY_COLORS = KEYS.map((k) => ({ top: srgb(k.top), horizon: srgb(k.horizon), sun: srgb(k.sun) }))
+const KEY_COLORS = KEYS.map((k) => ({ top: srgb(k.top), mid: srgb(k.mid), horizon: srgb(k.horizon), sun: srgb(k.sun) }))
 
 export const dawn = {
   t: 0,
   top: srgb(KEYS[0].top),
+  mid: srgb(KEYS[0].mid),
   horizon: srgb(KEYS[0].horizon),
+  stars: KEYS[0].stars,
   sunColor: srgb(KEYS[0].sun),
   sunIntensity: KEYS[0].intensity,
   sunElevationDeg: KEYS[0].elevationDeg,
@@ -52,7 +56,9 @@ function sample(t: number) {
   const b = KEYS[i]
   const k = THREE.MathUtils.smoothstep(t, a.t, b.t)
   dawn.top.lerpColors(KEY_COLORS[i - 1].top, KEY_COLORS[i].top, k)
+  dawn.mid.lerpColors(KEY_COLORS[i - 1].mid, KEY_COLORS[i].mid, k)
   dawn.horizon.lerpColors(KEY_COLORS[i - 1].horizon, KEY_COLORS[i].horizon, k)
+  dawn.stars = THREE.MathUtils.lerp(a.stars, b.stars, k)
   dawn.sunColor.lerpColors(KEY_COLORS[i - 1].sun, KEY_COLORS[i].sun, k)
   dawn.sunIntensity = THREE.MathUtils.lerp(a.intensity, b.intensity, k)
   dawn.sunElevationDeg = THREE.MathUtils.lerp(a.elevationDeg, b.elevationDeg, k)

@@ -33,5 +33,7 @@ export function makeLabelTexture(
 }
 
 export const LABEL_INK = INK
-export const DISPLAY_FONT = '"Jost Variable", system-ui, sans-serif'
-export const BODY_FONT = '"Archivo Variable", system-ui, sans-serif'
+// Canvas can't set font-stretch through the font shorthand reliably, so
+// signs use Archivo at its default width; the DOM carries the wide cut.
+export const DISPLAY_FONT = '"Archivo Variable", system-ui, sans-serif'
+export const BODY_FONT = '"Instrument Sans Variable", system-ui, sans-serif'

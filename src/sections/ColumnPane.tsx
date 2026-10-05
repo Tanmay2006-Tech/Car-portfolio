@@ -2,42 +2,19 @@ import { useEffect, useMemo, useRef } from 'react'
 
 import { scroll, DOOR_OPEN_START } from '../scene/scrollState'
 import { carPose } from '../scene/carPose'
-import { dawn } from '../scene/DawnCycle'
 import { ROUTE_CURVE } from '../scene/curve'
 import { LEG_START } from '../scene/legs'
-import { ROUTE_LENGTH_M } from '../scene/routeMarks'
-import { useSection } from '../scene/sectionStore'
 
-// The 36% column from CLAUDE.md section 2's layout, made physical: a
-// frosted pane behind the leg text, tinted with the current horizon colour
-// so it changes with the sunrise. It carries the drive's instruments:
-//
-//   pane    which leg this is, the trip distance, and the dawn clock
-//   map     a top-down map of the real route with the car on it, set in
-//           the stage's bottom-right corner beside the speed gauge
+// The 36% column from CLAUDE.md section 2's layout, made physical: a dark
+// frosted pane behind the leg text. Alongside it, set in the stage's
+// bottom-right corner beside the speed gauge, a top-down map of the real
+// route with the car on it. (The leg name, trip and clock live in the top
+// bar — sections/TopNav.tsx.)
 //
 // Arrives as the hero text leaves and leaves as the camera swings to the
 // door in leg 5, where "the column drops away". Desktop only — mobile
 // already has a solid panel under the car. Decorative (aria-hidden): every
 // fact in it is also in the page's real content.
-
-const LEG_NAMES: Record<number, string> = {
-  [-2]: 'Parked overnight',
-  [-1]: 'Cold start',
-  0: 'Pulling away',
-  1: 'Leg 1, the straight',
-  2: 'Leg 2, cruise',
-  3: 'Leg 3, the service log',
-  4: 'Leg 4, the risk layer',
-  5: 'Leg 5, arrival',
-  6: 'Parked',
-}
-
-// Dawn clock: 05:38 at the hero, an hour later by the cabin.
-function clock(t: number) {
-  const minutes = 5 * 60 + 38 + Math.round(t * 62)
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
-}
 
 const MAP_W = 300
 const MAP_H = 92
@@ -46,10 +23,7 @@ const MAP_PAD = 8
 export function ColumnPane() {
   const ref = useRef<HTMLDivElement>(null)
   const mapRef = useRef<SVGSVGElement>(null)
-  const kmRef = useRef<HTMLSpanElement>(null)
-  const clockRef = useRef<HTMLSpanElement>(null)
   const dotRef = useRef<SVGCircleElement>(null)
-  const section = useSection((s) => s.section)
 
   // The route drawn to scale, top-down, fitted into the map box.
   const map = useMemo(() => {
@@ -81,8 +55,6 @@ export function ColumnPane() {
         // parent would trap a fixed child), on the same fade.
         if (mapRef.current) mapRef.current.style.opacity = el.style.opacity
       }
-      if (kmRef.current) kmRef.current.textContent = `${((carPose.progress * ROUTE_LENGTH_M) / 1000).toFixed(2)} km`
-      if (clockRef.current) clockRef.current.textContent = clock(dawn.t)
       const [x, y] = map.project(carPose.position.x, carPose.position.z)
       dotRef.current?.setAttribute('cx', x.toFixed(1))
       dotRef.current?.setAttribute('cy', y.toFixed(1))
@@ -93,15 +65,7 @@ export function ColumnPane() {
 
   return (
     <>
-      <div ref={ref} className="column-pane" aria-hidden="true" style={{ opacity: 0, visibility: 'hidden' }}>
-        <div className="instruments">
-          <span className="instruments__leg">{LEG_NAMES[section] ?? ''}</span>
-          <span className="instruments__read">
-            <span ref={kmRef}>0.00 km</span>
-            <span ref={clockRef}>05:38</span>
-          </span>
-        </div>
-      </div>
+      <div ref={ref} className="column-pane" aria-hidden="true" style={{ opacity: 0, visibility: 'hidden' }} />
       <svg ref={mapRef} className="route-map" viewBox={`0 0 ${MAP_W} ${MAP_H}`} aria-hidden="true" style={{ opacity: 0 }}>
         <path d={map.path} className="route-map__road" />
         {map.ticks.map(([x, y], i) => (

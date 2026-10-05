@@ -40,8 +40,11 @@ function ProjectBoard({ index }: { index: number }) {
           ctx.strokeRect(26, 26, w - 52, h - 52)
           ctx.fillStyle = LABEL_INK
           ctx.textBaseline = 'alphabetic'
-          ctx.font = `600 132px ${DISPLAY_FONT}`
+          // The DOM's wide display cut, where the canvas supports it.
+          ;(ctx as CanvasRenderingContext2D & { fontStretch?: string }).fontStretch = 'expanded'
+          ctx.font = `700 120px ${DISPLAY_FONT}`
           ctx.fillText(project.name, 70, 200, w - 140)
+          ;(ctx as CanvasRenderingContext2D & { fontStretch?: string }).fontStretch = 'normal'
           ctx.font = `400 42px ${BODY_FONT}`
           ctx.fillText(project.kind, 74, 262, w - 140)
           ctx.fillRect(74, 312, 90, 5)

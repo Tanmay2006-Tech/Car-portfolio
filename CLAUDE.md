@@ -589,3 +589,13 @@ All four verified against a rebuilt pipeline (`node tools/prepare-model.mjs && b
 - **Scenery.** `Scenery.tsx` rewritten: avenues of lollipop/poplar trees at a steady rhythm on both verges (kept clear of signs), rows of rounded pastel buildings squared to the road and pushed back behind leg 1's boards, soft hills on the horizon. No shadow casting/receiving — the sun's shadow camera only spans the car, so it was pure cost. Project markers are now framed signboards on two ink posts carrying the project's key figure; leg 3 posts are numbered panels.
 - **Column.** Frosted pane tinted with the live horizon colour, an instrument strip (current leg, trip km, a dawn clock 05:38→06:40), a to-scale route map with the car beside the speed gauge, project cards with a key figure (`content.ts` `figure`), outlined stack tags, a five-step position indicator, and a heat-ramp legend in leg 4.
 - Re-checked: no column overflow at 1280×720 through 1920×1080, every keyboard focus stop on screen, mobile layout.
+
+**2026-10-05 — Visual redesign at the owner's direction. Supersedes section 2's palette and type.**
+
+The owner found the pastel look too basic ("font and color is also simple... add background more eye catching") and asked for a more professional redesign of every content section, new fonts and new colours. New direction: **sunrise over the test track**, shot like a car launch.
+
+- **Palette** (`src/index.css`): night `#141A3C`, violet `#5B3F7E`, apricot glow `#F49A5E`, gold `#F2B65E` (numbers and highlights), ivory `#F3ECE2` (all text), Guards Red `#D0111B` still only the car and the single "Send message" CTA. Text is ivory on dark glass panels; focus rings are gold (red was too dark on the night sky).
+- **Type**: Archivo at full 125% width, weights 700–800, for display (car-badging feel); Instrument Sans for body. Jost removed.
+- **Scene** (`DawnCycle.tsx`, `Sky.tsx`, `colors.ts`, `Scenery.tsx`): indigo sky with a violet band, apricot horizon and fading stars, warming to gold and early-morning blue over the drive; deep teal fields, slate road (`ASPHALT #3D3C4C`, `VERGE #36544F`), dusk-toned trees/buildings, low violet hills far back.
+- **Layout**: fixed top bar (`TopNav.tsx`) with name, live leg/trip/clock, jump links that snap the car (`carPose.snap`) and a Resume button; a rebuilt hero with a huge two-line wide name, one credential line for the published paper, and "See the work" / "Resume" buttons; every leg on a dark frosted column with gold figures.
+- Re-checked: no column overflow 1280×720–1920×1080, every focus stop on screen, mobile, ~50fps through the legs on the dev machine (unchanged from before the redesign). `public/hero-static.jpg` regenerated in the new look.
